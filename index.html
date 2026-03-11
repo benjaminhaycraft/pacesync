@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1226,25 +1225,54 @@
     }
 
     async function searchTracksByBpm(token, targetBpm, limit = 20, genres = "electronic,rock,pop") {
-      const params = new URLSearchParams({
-        seed_genres: genres,
-        target_tempo: targetBpm,
-        min_tempo: Math.max(95, targetBpm - 15),
-        max_tempo: Math.min(180, targetBpm + 15),
-        min_energy: 0.5,
-        market: "US",
-        limit: limit,
-      });
-
-      return spotifyFetch(token, `/recommendations?${params.toString()}`);
+      // Try recommendations first
+      try {
+        const params = new URLSearchParams({
+          seed_genres: genres,
+          target_tempo: targetBpm,
+          min_tempo: Math.max(95, targetBpm - 15),
+          max_tempo: Math.min(180, targetBpm + 15),
+          min_energy: 0.5,
+          market: "US",
+          limit: limit,
+        });
+        const result = await spotifyFetch(token, `/recommendations?${params.toString()}`);
+        if (result.tracks && result.tracks.length > 0) return result;
+      } catch (e) {
+        console.warn("Recommendations API failed, trying search fallback", e);
+      }
+      // Fallback to search API
+      const genre = genres.split(",")[0] || "pop";
+      return searchTracksByQuery(token, targetBpm, limit, genre);
     }
 
-    async function getAudioFeatures(token, trackIds) {
-      const params = new URLSearchParams({
-        ids: trackIds.join(","),
-      });
-
-      return spotifyFetch(token, `/audio-features?${params.toString()}`);
+    // Fallback: search Spotify catalog by genre + BPM keywords
+    async function searchTracksByQuery(token, targetBpm, limit = 3, genre = "pop") {
+      const bpmRange = `${Math.max(80, targetBpm - 10)}-${Math.min(200, targetBpm + 10)}`;
+      const queries = [
+        `genre:${genre} year:2020-2026`,
+        `genre:${genre}`,
+        `${genre} workout running`,
+      ];
+      for (const q of queries) {
+        try {
+          const params = new URLSearchParams({
+            q: q,
+            type: "track",
+            market: "US",
+            limit: Math.min(limit * 3, 50),
+          });
+          const data = await spotifyFetch(token, `/search?${params.toString()}`);
+          if (data.tracks && data.tracks.items && data.tracks.items.length > 0) {
+            // Shuffle results for variety
+            const shuffled = data.tracks.items.sort(() => Math.random() - 0.5);
+            return { tracks: shuffled.slice(0, limit) };
+          }
+        } catch (e) {
+          console.warn("Search fallback query failed:", q, e);
+        }
+      }
+      return { tracks: [] };
     }
 
     async function getTopTracks(token, timeRange = "medium_term", limit = 20) {
@@ -1258,24 +1286,34 @@
     }
 
     async function searchTracksByBpmPersonalized(token, targetBpm, limit = 20, seedTrackIds = [], seedArtistIds = []) {
-      const params = new URLSearchParams({
-        target_tempo: targetBpm,
-        min_tempo: Math.max(95, targetBpm - 15),
-        max_tempo: Math.min(180, targetBpm + 15),
-        min_energy: 0.5,
-        market: "US",
-        limit: limit,
-      });
-      if (seedTrackIds.length > 0) {
-        params.set("seed_tracks", seedTrackIds.slice(0, 3).join(","));
+      // Try recommendations first
+      try {
+        const params = new URLSearchParams({
+          target_tempo: targetBpm,
+          min_tempo: Math.max(95, targetBpm - 15),
+          max_tempo: Math.min(180, targetBpm + 15),
+          min_energy: 0.5,
+          market: "US",
+          limit: limit,
+        });
+        if (seedTrackIds.length > 0) {
+          params.set("seed_tracks", seedTrackIds.slice(0, 3).join(","));
+        }
+        if (seedArtistIds.length > 0) {
+          params.set("seed_artists", seedArtistIds.slice(0, 2).join(","));
+        }
+        if (seedTrackIds.length === 0 && seedArtistIds.length === 0) {
+          params.set("seed_genres", "electronic,rock,pop");
+        }
+        const result = await spotifyFetch(token, `/recommendations?${params.toString()}`);
+        if (result.tracks && result.tracks.length > 0) return result;
+      } catch (e) {
+        console.warn("Personalized recommendations failed, trying search fallback", e);
       }
-      if (seedArtistIds.length > 0) {
-        params.set("seed_artists", seedArtistIds.slice(0, 2).join(","));
-      }
-      if (seedTrackIds.length === 0 && seedArtistIds.length === 0) {
-        params.set("seed_genres", "electronic,rock,pop");
-      }
-      return spotifyFetch(token, `/recommendations?${params.toString()}`);
+      // Fallback to search API with varied genres
+      const genres = ["pop", "rock", "electronic", "indie", "hip-hop"];
+      const genre = genres[Math.floor(Math.random() * genres.length)];
+      return searchTracksByQuery(token, targetBpm, limit, genre);
     }
 
     async function createSpotifyPlaylist(token, userId, name, description, trackUris) {
@@ -1696,40 +1734,16 @@
               try {
                 let rec;
                 if (musicMode === "random" && topSeeds) {
-                  // Random shuffle: pick random seeds from full listening history
                   const shuffledTracks = [...topSeeds.trackIds].sort(() => Math.random() - 0.5);
-                  const shuffledArtists = [...topSeeds.artistIds].sort(() => Math.random() - 0.5);
                   rec = await searchTracksByBpmPersonalized(
                     spotifyToken, bpm, 3,
                     shuffledTracks.slice(0, 5),
                     []
                   );
                 } else if (musicMode === "mood" && selectedMood) {
-                  // Mood mode: use selected genre + user's top artists for personalization
-                  if (topSeeds) {
-                    // Filter user's top artists that match the mood genre
-                    const matchingArtists = topSeeds.artistIds.filter((id, idx) => {
-                      const artistGenres = topSeeds.genres || [];
-                      return true; // Use all artists but seed with the mood genre
-                    }).sort(() => Math.random() - 0.5);
-                    const params = new URLSearchParams({
-                      seed_genres: selectedMood,
-                      target_tempo: bpm,
-                      min_tempo: Math.max(95, bpm - 15),
-                      max_tempo: Math.min(180, bpm + 15),
-                      min_energy: 0.5,
-                      market: "US",
-                      limit: 3,
-                    });
-                    if (matchingArtists.length > 0) {
-                      params.set("seed_artists", matchingArtists.slice(0, 2).join(","));
-                    }
-                    rec = await spotifyFetch(spotifyToken, `/recommendations?${params.toString()}`);
-                  } else {
-                    rec = await searchTracksByBpm(spotifyToken, bpm, 3, selectedMood);
-                  }
+                  // Mood mode: use searchTracksByBpm with selected genre (has built-in fallback)
+                  rec = await searchTracksByBpm(spotifyToken, bpm, 3, selectedMood);
                 } else if (musicMode === "my-taste" && topSeeds) {
-                  // My taste: use top tracks + artists as seeds
                   const shuffledTracks = [...topSeeds.trackIds].sort(() => Math.random() - 0.5);
                   const shuffledArtists = [...topSeeds.artistIds].sort(() => Math.random() - 0.5);
                   rec = await searchTracksByBpmPersonalized(
@@ -1738,19 +1752,22 @@
                     shuffledArtists.slice(0, 2)
                   );
                 } else {
-                  // Generic fallback
-                  const genres = Math.random() > 0.5 ? "electronic" : "rock";
-                  rec = await searchTracksByBpm(spotifyToken, bpm, 3, genres);
+                  const genres = ["electronic", "rock", "pop", "indie"];
+                  const genre = genres[Math.floor(Math.random() * genres.length)];
+                  rec = await searchTracksByBpm(spotifyToken, bpm, 3, genre);
                 }
-                const trackIds = rec.tracks.map((t) => t.id);
-                const features = await getAudioFeatures(spotifyToken, trackIds);
 
-                segmentTracks = rec.tracks.map((t, i) => ({
-                  name: t.name,
-                  artist: t.artists[0].name,
-                  bpm: Math.round(features.audio_features[i].tempo),
-                  uri: t.uri,
-                }));
+                // Use target BPM directly (no need for audio-features API)
+                if (rec.tracks && rec.tracks.length > 0) {
+                  segmentTracks = rec.tracks.map((t) => ({
+                    name: t.name,
+                    artist: t.artists?.[0]?.name || "Unknown Artist",
+                    bpm: bpm,
+                    uri: t.uri,
+                  }));
+                } else {
+                  segmentTracks = MOCK_TRACKS.filter((t) => Math.abs(t.bpm - bpm) <= 20).slice(0, 3);
+                }
               } catch (err) {
                 console.warn("Spotify API error, using mock tracks", err);
                 segmentTracks = MOCK_TRACKS.filter((t) => Math.abs(t.bpm - bpm) <= 20).slice(0, 3);
@@ -1790,6 +1807,16 @@
           return;
         }
 
+        // Filter out mock track URIs (they start with spotify:track:mock)
+        const realTrackUris = generatedPlaylist.trackUris.filter(
+          (uri) => uri && !uri.includes(":mock")
+        );
+
+        if (realTrackUris.length === 0) {
+          setMessage({ type: "error", text: "No real Spotify tracks found. Try regenerating or connect to Spotify first." });
+          return;
+        }
+
         setLoading(true);
         try {
           const trailName = currentTrail?.name || "Custom Trail";
@@ -1798,12 +1825,12 @@
             spotifyUser.id,
             `PaceDrop: ${trailName} @ ${targetPace.toFixed(1)}/km`,
             `Generated with PaceDrop for ${trailName} at ${paceMin.toFixed(1)} min/km pace`,
-            generatedPlaylist.trackUris
+            realTrackUris
           );
 
           setMessage({
             type: "success",
-            text: `Playlist saved! ${playlist.name} - Check your Spotify library`,
+            text: `Playlist saved! ${playlist.name} (${realTrackUris.length} tracks) - Check your Spotify library`,
           });
         } catch (err) {
           setMessage({ type: "error", text: `Save error: ${err.message}` });
