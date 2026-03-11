@@ -1667,10 +1667,10 @@
       const [flatRunActive, setFlatRunActive] = useState(false);
       const [flatRunDistance, setFlatRunDistance] = useState(10);
       const [targetMode, setTargetMode] = useState("pace");
-      const [targetPace, setTargetPace] = useState(6);
-      const [targetTime, setTargetTime] = useState(2);
-      const [targetTimeHours, setTargetTimeHours] = useState(2);
-      const [targetTimeMinutes, setTargetTimeMinutes] = useState(0);
+      const [targetPace, setTargetPace] = useState(5);
+      const [targetTime, setTargetTime] = useState(0.83);
+      const [targetTimeHours, setTargetTimeHours] = useState(0);
+      const [targetTimeMinutes, setTargetTimeMinutes] = useState(50);
       const [generatedPlaylist, setGeneratedPlaylist] = useState(null);
       const [loading, setLoading] = useState(false);
       const [message, setMessage] = useState(null);
@@ -1768,6 +1768,22 @@
 
       const trailElevGain = currentTrail ? currentTrail.elevGain : 0;
 
+      // Auto-set realistic default time when trail changes
+      // ~5:00/km base pace, add ~30s/km per 100m elevation gain
+      useEffect(() => {
+        if (trailDistance > 0) {
+          const elevFactor = trailElevGain > 0 ? (trailElevGain / 100) * 0.5 : 0;
+          const realisticPace = 5.0 + elevFactor / trailDistance;
+          const realisticMinutes = Math.round(trailDistance * realisticPace);
+          const hrs = Math.floor(realisticMinutes / 60);
+          const mins = realisticMinutes % 60;
+          setTargetPace(Math.round(realisticPace * 10) / 10);
+          setTargetTime(realisticMinutes / 60);
+          setTargetTimeHours(hrs);
+          setTargetTimeMinutes(mins);
+        }
+      }, [currentTrail?.id, trailDistance]);
+
       let paceMin = targetPace;
       let estimatedTime = 0;
 
@@ -1795,8 +1811,16 @@
           const segments = elevSegments;
           const tracksBySegment = [];
 
-          for (const seg of segments) {
-            const bpm = gradientToBpm(seg.gradient, baseBpm);
+          const totalSegments = segments.length;
+          for (let segIdx = 0; segIdx < segments.length; segIdx++) {
+            const seg = segments[segIdx];
+            // Progressive BPM: start ~12% slower, ramp up to ~5% faster by end
+            // Creates a warmup → cruise → push finish feel
+            const progress = totalSegments > 1 ? segIdx / (totalSegments - 1) : 1;
+            // Eased curve: slow start, gradual build, strong finish
+            const progressionFactor = 0.88 + 0.17 * Math.pow(progress, 1.3);
+            const rawBpm = gradientToBpm(seg.gradient, baseBpm);
+            const bpm = Math.round(Math.max(95, Math.min(185, rawBpm * progressionFactor)));
             let segmentTracks = [];
 
             if (spotifyToken) {
@@ -2310,7 +2334,7 @@
                   <div className="flat-run-preview">
                     <div><strong>{flatRunDistance} km</strong> distance</div>
                     <div><strong>0 m</strong> elevation gain</div>
-                    <div>Constant BPM throughout</div>
+                    <div>Progressive BPM: warm up → push finish</div>
                   </div>
                 </>
               )}
