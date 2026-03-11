@@ -1317,10 +1317,13 @@
     }
 
     async function createSpotifyPlaylist(token, userId, name, description, trackUris) {
-      const playlistResp = await fetch(`https://api.spotify.com/v1/users/${userId}/playlists`, {
+      let currentToken = token;
+
+      // First attempt
+      let playlistResp = await fetch(`https://api.spotify.com/v1/users/${userId}/playlists`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${currentToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -1330,19 +1333,55 @@
         }),
       });
 
-      if (!playlistResp.ok) throw new Error("Failed to create playlist");
+      // If 401, try refreshing the token
+      if (playlistResp.status === 401) {
+        const refreshToken = localStorage.getItem("spotifyRefreshToken");
+        if (refreshToken) {
+          currentToken = await refreshSpotifyToken(refreshToken);
+          playlistResp = await fetch(`https://api.spotify.com/v1/users/${userId}/playlists`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${currentToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              name: name,
+              description: description,
+              public: false,
+            }),
+          });
+        }
+      }
+
+      if (!playlistResp.ok) {
+        const errData = await playlistResp.json().catch(() => ({}));
+        const errMsg = errData?.error?.message || playlistResp.statusText || "Unknown error";
+        if (playlistResp.status === 403) {
+          throw new Error(`Spotify denied access (403). Try disconnecting and reconnecting Spotify — click the Disconnect button, then Connect again.`);
+        }
+        throw new Error(`Playlist creation failed (${playlistResp.status}): ${errMsg}`);
+      }
       const playlist = await playlistResp.json();
+
+      // Add tracks (filter out any invalid URIs)
+      const validUris = trackUris.filter(uri => uri && uri.startsWith("spotify:track:") && !uri.includes(":mock"));
+      if (validUris.length === 0) {
+        throw new Error("No valid Spotify tracks to add. Try regenerating the playlist.");
+      }
 
       const addTracksResp = await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${currentToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ uris: trackUris }),
+        body: JSON.stringify({ uris: validUris }),
       });
 
-      if (!addTracksResp.ok) throw new Error("Failed to add tracks to playlist");
+      if (!addTracksResp.ok) {
+        const errData = await addTracksResp.json().catch(() => ({}));
+        throw new Error(`Failed to add tracks: ${errData?.error?.message || addTracksResp.statusText}`);
+      }
       return playlist;
     }
 
@@ -1898,8 +1937,11 @@
                 onClick={() => {
                   localStorage.removeItem("spotifyAccessToken");
                   localStorage.removeItem("spotifyRefreshToken");
+                  localStorage.removeItem("spotifyCodeVerifier");
                   setSpotifyToken(null);
                   setSpotifyUser(null);
+                  setTopSeeds(null);
+                  setGeneratedPlaylist(null);
                 }}
               >
                 Disconnect
