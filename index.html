@@ -1515,10 +1515,12 @@
     // ============ MAIN APP ============
     // ============ RUN DROP CARD ============
     function RunDropCard({ playlist, trail, baseBpm }) {
-      if (!playlist || !trail || !trail.profile || trail.profile.length < 2) return null;
+      if (!playlist || !trail || !playlist.segments || playlist.segments.length === 0) return null;
 
-      // Find the steepest descent (the "drop" moment)
-      const profile = trail.profile;
+      const profile = trail.profile || [];
+      const isFlat = !profile.length || profile.every((v) => Math.abs(v - profile[0]) < 5);
+
+      // For trails with elevation: find the steepest descent
       let maxDrop = 0;
       let dropIdx = 0;
       for (let i = 1; i < profile.length; i++) {
@@ -1529,49 +1531,77 @@
         }
       }
 
-      // If it's a flat run with no real drop, don't show the card
-      if (maxDrop < 5) return null;
+      // For flat runs: find the highest BPM segment (peak energy moment)
+      let peakSegIdx = 0;
+      let peakBpm = 0;
+      playlist.segments.forEach((seg, idx) => {
+        if (seg.bpm > peakBpm) {
+          peakBpm = seg.bpm;
+          peakSegIdx = idx;
+        }
+      });
 
-      // Find the track that plays at the drop segment
-      const segmentIdx = Math.min(
-        Math.floor((dropIdx / profile.length) * playlist.segments.length),
-        playlist.segments.length - 1
-      );
-      const dropSegment = playlist.segments[segmentIdx];
-      const dropTrack = dropSegment?.tracks?.[0];
-      const dropBpm = dropSegment?.bpm || baseBpm;
+      // Choose which moment to feature
+      const hasDrop = maxDrop >= 5;
+      const featuredSegIdx = hasDrop
+        ? Math.min(Math.floor((dropIdx / Math.max(profile.length, 1)) * playlist.segments.length), playlist.segments.length - 1)
+        : peakSegIdx;
+      const featuredSegment = playlist.segments[featuredSegIdx];
+      const featuredTrack = featuredSegment?.tracks?.[0];
+      const featuredBpm = featuredSegment?.bpm || baseBpm;
 
-      // SVG elevation for the card
+      // Card labels
+      const badgeText = hasDrop ? "The Drop" : "Peak Energy";
+      const stat1Label = hasDrop ? "Drop" : "Distance";
+      const stat1Value = hasDrop ? `${Math.round(maxDrop)}m` : `${trail.distance || 0}K`;
+      const stat3Label = hasDrop ? "Elevation" : "Segments";
+      const stat3Value = hasDrop ? `${Math.round(Math.max(...profile))}m` : `${playlist.segments.length}`;
+
+      // SVG chart
       const width = 400;
       const height = 80;
-      const minElev = Math.min(...profile);
-      const maxElev = Math.max(...profile);
-      const elevRange = maxElev - minElev || 1;
-      const pts = profile.map((e, i) => [
-        (i / (profile.length - 1)) * width,
-        height - ((e - minElev) / elevRange) * height * 0.85 - 5,
-      ]);
-      const pathD = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" ");
-      const dropX = (dropIdx / (profile.length - 1)) * width;
+
+      // For flat runs, generate a BPM waveform instead of elevation
+      let pts, pathD, markerX, markerY;
+      if (hasDrop && profile.length >= 2) {
+        const minElev = Math.min(...profile);
+        const maxElev = Math.max(...profile);
+        const elevRange = maxElev - minElev || 1;
+        pts = profile.map((e, i) => [
+          (i / (profile.length - 1)) * width,
+          height - ((e - minElev) / elevRange) * height * 0.85 - 5,
+        ]);
+        markerX = (dropIdx / (profile.length - 1)) * width;
+        markerY = pts[dropIdx][1];
+      } else {
+        // BPM waveform for flat runs
+        const bpms = playlist.segments.map((s) => s.bpm);
+        const minBpm = Math.min(...bpms);
+        const maxBpmVal = Math.max(...bpms);
+        const bpmRange = maxBpmVal - minBpm || 1;
+        pts = bpms.map((b, i) => [
+          (i / Math.max(bpms.length - 1, 1)) * width,
+          height - ((b - minBpm) / bpmRange) * height * 0.75 - 5,
+        ]);
+        markerX = (peakSegIdx / Math.max(bpms.length - 1, 1)) * width;
+        markerY = pts[peakSegIdx] ? pts[peakSegIdx][1] : height / 2;
+      }
+      pathD = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" ");
 
       const handleShare = async () => {
-        // Create a canvas rendering of the card for sharing
-        const cardEl = document.getElementById("run-drop-card");
-        if (!cardEl) return;
-
-        // Use clipboard as fallback
+        const shareText = hasDrop
+          ? `${trail.name} — ${featuredBpm} BPM at the drop!`
+          : `${trail.name} — Peak energy at ${featuredBpm} BPM!`;
         const shareData = {
           title: "My Run Drop",
-          text: `${trail.name} — ${dropBpm} BPM at the drop! Made with PaceDrop`,
+          text: `${shareText} Made with PaceDrop`,
           url: window.location.href,
         };
         if (navigator.share) {
           try { await navigator.share(shareData); } catch (e) { /* user cancelled */ }
         } else {
           try {
-            await navigator.clipboard.writeText(
-              `${shareData.text}\n${shareData.url}`
-            );
+            await navigator.clipboard.writeText(`${shareData.text}\n${shareData.url}`);
             alert("Copied to clipboard!");
           } catch (e) { /* fallback */ }
         }
@@ -1580,7 +1610,7 @@
       return (
         <div className="run-drop-card" id="run-drop-card">
           <div className="run-drop-header">
-            <div className="run-drop-badge">The Drop</div>
+            <div className="run-drop-badge">{badgeText}</div>
             <div className="run-drop-brand">PaceDrop</div>
           </div>
 
@@ -1592,38 +1622,38 @@
               </linearGradient>
               <linearGradient id="dropStroke" x1="0%" y1="0%" x2="100%" y2="0%">
                 <stop offset="0%" stopColor="#0FA68A" />
-                <stop offset={`${(dropIdx / profile.length) * 100}%`} stopColor="#FF6B54" />
+                <stop offset="50%" stopColor="#FF6B54" />
                 <stop offset="100%" stopColor="#FF8C42" />
               </linearGradient>
             </defs>
             <path d={`${pathD} L${width} ${height} L0 ${height} Z`} fill="url(#dropFill)" />
             <path d={pathD} fill="none" stroke="url(#dropStroke)" strokeWidth="2.5" />
-            <circle cx={dropX} cy={pts[dropIdx][1]} r="6" fill="#FF6B54" stroke="white" strokeWidth="2">
+            <circle cx={markerX} cy={markerY} r="6" fill="#FF6B54" stroke="white" strokeWidth="2">
               <animate attributeName="r" values="5;8;5" dur="2s" repeatCount="indefinite" />
               <animate attributeName="opacity" values="1;0.6;1" dur="2s" repeatCount="indefinite" />
             </circle>
-            <line x1={dropX} y1={pts[dropIdx][1] + 10} x2={dropX} y2={height} stroke="rgba(255, 107, 84, 0.3)" strokeWidth="1" strokeDasharray="3,3" />
+            <line x1={markerX} y1={markerY + 10} x2={markerX} y2={height} stroke="rgba(255, 107, 84, 0.3)" strokeWidth="1" strokeDasharray="3,3" />
           </svg>
 
           <div className="run-drop-stats">
-            <div><span>Drop: </span><strong>{Math.round(maxDrop)}m</strong></div>
-            <div><span>Peak BPM: </span><strong>{dropBpm}</strong></div>
-            <div><span>Elevation: </span><strong>{Math.round(maxElev)}m</strong></div>
+            <div><span>{stat1Label}: </span><strong>{stat1Value}</strong></div>
+            <div><span>Peak BPM: </span><strong>{featuredBpm}</strong></div>
+            <div><span>{stat3Label}: </span><strong>{stat3Value}</strong></div>
           </div>
 
-          {dropTrack && (
+          {featuredTrack && (
             <div className="run-drop-track">
               <div className="run-drop-track-icon">&#9835;</div>
               <div>
-                <div className="run-drop-track-name">{dropTrack.name}</div>
-                <div className="run-drop-track-artist">{dropTrack.artist}</div>
+                <div className="run-drop-track-name">{featuredTrack.name}</div>
+                <div className="run-drop-track-artist">{featuredTrack.artist}</div>
               </div>
-              <div className="run-drop-track-bpm">{dropTrack.bpm} BPM</div>
+              <div className="run-drop-track-bpm">{featuredTrack.bpm} BPM</div>
             </div>
           )}
 
           <button className="share-btn" onClick={handleShare}>
-            Share Your Drop
+            {hasDrop ? "Share Your Drop" : "Share Your Run"}
           </button>
         </div>
       );
