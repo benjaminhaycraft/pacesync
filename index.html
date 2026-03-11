@@ -1319,8 +1319,8 @@
     async function createSpotifyPlaylist(token, userId, name, description, trackUris) {
       let currentToken = token;
 
-      // First attempt
-      let playlistResp = await fetch(`https://api.spotify.com/v1/users/${userId}/playlists`, {
+      // Use POST /me/playlists (Feb 2026 migration: /users/{id}/playlists was removed)
+      let playlistResp = await fetch(`https://api.spotify.com/v1/me/playlists`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${currentToken}`,
@@ -1338,7 +1338,7 @@
         const refreshToken = localStorage.getItem("spotifyRefreshToken");
         if (refreshToken) {
           currentToken = await refreshSpotifyToken(refreshToken);
-          playlistResp = await fetch(`https://api.spotify.com/v1/users/${userId}/playlists`, {
+          playlistResp = await fetch(`https://api.spotify.com/v1/me/playlists`, {
             method: "POST",
             headers: {
               Authorization: `Bearer ${currentToken}`,
@@ -1369,7 +1369,8 @@
         throw new Error("No valid Spotify tracks to add. Try regenerating the playlist.");
       }
 
-      const addTracksResp = await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
+      // Use POST /playlists/{id}/items (Feb 2026 migration: /tracks was renamed to /items)
+      const addTracksResp = await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/items`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${currentToken}`,
