@@ -1733,12 +1733,28 @@
             getTopTracks(token, "medium_term", 20),
             getTopArtists(token, "medium_term", 10),
           ]);
+
+          // Build artist affinity map: artistId → average popularity from user's top tracks
+          const artistAffinityMap = new Map();
+          topTracksData.items.forEach((t) => {
+            (t.artists || []).forEach((a) => {
+              if (!artistAffinityMap.has(a.id)) artistAffinityMap.set(a.id, []);
+              artistAffinityMap.get(a.id).push(t.popularity || 0);
+            });
+          });
+          // Convert arrays to averages
+          artistAffinityMap.forEach((pops, artistId) => {
+            artistAffinityMap.set(artistId, pops.reduce((a, b) => a + b, 0) / pops.length);
+          });
+
           setTopSeeds({
             trackIds: topTracksData.items.map((t) => t.id),
             trackNames: topTracksData.items.slice(0, 5).map((t) => t.name),
             artistIds: topArtistsData.items.map((a) => a.id),
             artistNames: topArtistsData.items.slice(0, 5).map((a) => a.name),
             genres: [...new Set(topArtistsData.items.flatMap((a) => a.genres))].slice(0, 10),
+            topTracksFull: topTracksData.items, // Full objects for scoring
+            artistAffinityMap, // artistId → avg popularity from user history
           });
         } catch (err) {
           console.warn("Could not load listening history", err);
@@ -1801,6 +1817,50 @@
 
       const baseBpm = paceToBaseBpm(paceMin);
 
+      // ============ TRACK SCORING ALGORITHM ============
+      // Scores a candidate track (0–100) using 4 signals:
+      //   User Affinity (40), BPM Proximity (30), Popularity (20), Artist Variety (−10)
+      function scoreTrack(track, targetBpm, seeds, usedArtistCounts) {
+        // Signal 1: BPM Proximity (0–30 pts) — linear decay over ±30 BPM
+        const bpmDiff = Math.abs((track.tempo || targetBpm) - targetBpm);
+        const bpmScore = Math.max(0, 30 * (1 - bpmDiff / 30));
+
+        // Signal 2: User Affinity (0–40 pts)
+        let affinityScore = 0;
+        if (seeds && seeds.topTracksFull) {
+          const isTopTrack = seeds.topTracksFull.some((t) => t.id === track.id);
+          if (isTopTrack) {
+            affinityScore = 40; // Direct match — user actively listens to this track
+          } else if (track.artists && track.artists.length > 0 && seeds.artistAffinityMap) {
+            // Check if any of the track's artists appear in user's history
+            const bestArtistAffinity = Math.max(
+              0,
+              ...track.artists.map((a) => seeds.artistAffinityMap.get(a.id) || 0)
+            );
+            if (bestArtistAffinity > 0) {
+              affinityScore = 20 + (bestArtistAffinity / 100) * 20; // 20–40 scaled
+            }
+          }
+        }
+
+        // Signal 3: Worldwide Popularity (0–20 pts)
+        const popularityScore = ((track.popularity || 0) / 100) * 20;
+
+        // Signal 4: Artist Variety Penalty (0 to −10 pts)
+        let varietyPenalty = 0;
+        if (track.artists && track.artists.length > 0) {
+          const primaryArtistId = track.artists[0].id;
+          const count = usedArtistCounts.get(primaryArtistId) || 0;
+          if (count >= 3) {
+            varietyPenalty = 10; // Hard penalty — too many tracks from this artist
+          } else if (count > 0) {
+            varietyPenalty = 5 * count; // Soft penalty per appearance
+          }
+        }
+
+        return Math.max(0, Math.min(100, bpmScore + affinityScore + popularityScore - varietyPenalty));
+      }
+
       const generatePlaylistTracks = async () => {
         if (!currentTrail) {
           setMessage({ type: "error", text: "Please select or import a trail" });
@@ -1812,67 +1872,94 @@
           const segments = elevSegments;
           const tracksBySegment = [];
 
+          // ── Dedup & variety state (reset each generation) ──
+          const usedTrackIds = new Set();
+          const usedArtistCounts = new Map();
+          const OVER_FETCH = 10; // Fetch 10 candidates per segment, pick best 1
+
           const totalSegments = segments.length;
           for (let segIdx = 0; segIdx < segments.length; segIdx++) {
             const seg = segments[segIdx];
             // Progressive BPM: start ~12% slower, ramp up to ~5% faster by end
-            // Creates a warmup → cruise → push finish feel
             const progress = totalSegments > 1 ? segIdx / (totalSegments - 1) : 1;
-            // Eased curve: slow start, gradual build, strong finish
             const progressionFactor = 0.88 + 0.17 * Math.pow(progress, 1.3);
             const rawBpm = gradientToBpm(seg.gradient, baseBpm);
             const bpm = Math.round(Math.max(95, Math.min(185, rawBpm * progressionFactor)));
-            let segmentTracks = [];
+            let selectedTrack = null;
 
             if (spotifyToken) {
               try {
+                // ── Fetch candidates (over-fetch for dedup headroom) ──
                 let rec;
                 if (musicMode === "random" && topSeeds) {
                   const shuffledTracks = [...topSeeds.trackIds].sort(() => Math.random() - 0.5);
                   rec = await searchTracksByBpmPersonalized(
-                    spotifyToken, bpm, 3,
+                    spotifyToken, bpm, OVER_FETCH,
                     shuffledTracks.slice(0, 5),
                     []
                   );
                 } else if (musicMode === "mood" && selectedMood) {
-                  // Mood mode: use searchTracksByBpm with selected genre (has built-in fallback)
-                  rec = await searchTracksByBpm(spotifyToken, bpm, 3, selectedMood);
+                  rec = await searchTracksByBpm(spotifyToken, bpm, OVER_FETCH, selectedMood);
                 } else if (musicMode === "my-taste" && topSeeds) {
                   const shuffledTracks = [...topSeeds.trackIds].sort(() => Math.random() - 0.5);
                   const shuffledArtists = [...topSeeds.artistIds].sort(() => Math.random() - 0.5);
                   rec = await searchTracksByBpmPersonalized(
-                    spotifyToken, bpm, 3,
+                    spotifyToken, bpm, OVER_FETCH,
                     shuffledTracks.slice(0, 3),
                     shuffledArtists.slice(0, 2)
                   );
                 } else {
                   const genres = ["electronic", "rock", "pop", "indie"];
                   const genre = genres[Math.floor(Math.random() * genres.length)];
-                  rec = await searchTracksByBpm(spotifyToken, bpm, 3, genre);
+                  rec = await searchTracksByBpm(spotifyToken, bpm, OVER_FETCH, genre);
                 }
 
-                // Use target BPM directly (no need for audio-features API)
+                // ── Score, deduplicate, and select best track ──
                 if (rec.tracks && rec.tracks.length > 0) {
-                  segmentTracks = rec.tracks.map((t) => ({
-                    name: t.name,
-                    artist: t.artists?.[0]?.name || "Unknown Artist",
-                    bpm: bpm,
-                    uri: t.uri,
-                  }));
-                } else {
-                  segmentTracks = MOCK_TRACKS.filter((t) => Math.abs(t.bpm - bpm) <= 20).slice(0, 3);
+                  const candidates = rec.tracks
+                    .filter((t) => t.id && !usedTrackIds.has(t.id)) // Remove duplicates
+                    .map((t) => ({
+                      ...t,
+                      _score: scoreTrack(t, bpm, topSeeds, usedArtistCounts),
+                    }))
+                    .sort((a, b) => b._score - a._score); // Best first
+
+                  if (candidates.length > 0) {
+                    const best = candidates[0];
+                    usedTrackIds.add(best.id);
+                    const primaryArtistId = best.artists?.[0]?.id;
+                    if (primaryArtistId) {
+                      usedArtistCounts.set(primaryArtistId, (usedArtistCounts.get(primaryArtistId) || 0) + 1);
+                    }
+                    selectedTrack = {
+                      name: best.name,
+                      artist: best.artists?.[0]?.name || "Unknown Artist",
+                      bpm: bpm,
+                      uri: best.uri,
+                      popularity: best.popularity || 0,
+                      score: best._score,
+                    };
+                  }
                 }
               } catch (err) {
-                console.warn("Spotify API error, using mock tracks", err);
-                segmentTracks = MOCK_TRACKS.filter((t) => Math.abs(t.bpm - bpm) <= 20).slice(0, 3);
+                console.warn("Spotify API error for segment", segIdx, err);
               }
-            } else {
-              segmentTracks = MOCK_TRACKS.filter((t) => Math.abs(t.bpm - bpm) <= 20).slice(0, 3);
+            }
+
+            // ── Mock fallback (also deduped) ──
+            if (!selectedTrack) {
+              const mockCandidate = MOCK_TRACKS
+                .filter((t) => Math.abs(t.bpm - bpm) <= 20 && !usedTrackIds.has(t.uri))
+                .slice(0, 1)[0];
+              if (mockCandidate) {
+                usedTrackIds.add(mockCandidate.uri);
+                selectedTrack = { ...mockCandidate, bpm, score: 0 };
+              }
             }
 
             tracksBySegment.push({
               bpm,
-              tracks: segmentTracks,
+              tracks: selectedTrack ? [selectedTrack] : [],
             });
           }
 
@@ -1887,7 +1974,8 @@
             time: estimatedTime.toFixed(0),
           });
 
-          setMessage({ type: "success", text: "Playlist generated successfully!" });
+          const uniqueCount = new Set(allTrackUris).size;
+          setMessage({ type: "success", text: `Playlist generated! ${uniqueCount} unique tracks matched to your trail.` });
         } catch (err) {
           setMessage({ type: "error", text: `Generation error: ${err.message}` });
         } finally {
