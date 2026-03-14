@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pacedrop
+      POSTGRES_USER: pacedrop
+      POSTGRES_PASSWORD: pacedrop_secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pacedrop"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # PaceDrop API
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 3001
+      NODE_ENV: production
+      DATABASE_URL: postgresql://pacedrop:pacedrop_secret@db:5432/pacedrop
+      JWT_SECRET: ${JWT_SECRET:-change-this-in-production}
+      FRONTEND_URL: ${FRONTEND_URL:-https://benjaminhaycraft.github.io}
+      API_URL: ${API_URL:-http://localhost:3001}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:-}
+      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:-}
+      STRAVA_CLIENT_ID: ${STRAVA_CLIENT_ID:-211688}
+      STRAVA_CLIENT_SECRET: ${STRAVA_CLIENT_SECRET:-dda369893d1aa2400ba743efe4fe078b7673139b}
+      APPLE_CLIENT_ID: ${APPLE_CLIENT_ID:-}
+      APPLE_TEAM_ID: ${APPLE_TEAM_ID:-}
+      APPLE_KEY_ID: ${APPLE_KEY_ID:-}
+    ports:
+      - "3001:3001"
+    command: >
+      sh -c "node scripts/migrate.js && node src/server.js"
+
+volumes:
+  pgdata:

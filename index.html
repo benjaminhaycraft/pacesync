@@ -1648,6 +1648,194 @@
       },
     ];
 
+    // ============ PACEDROP API CLIENT ============
+    const PACEDROP_API = localStorage.getItem("paceDropApiUrl") || "http://localhost:3001/api";
+
+    const PaceDropAPI = {
+      _token: localStorage.getItem("paceDropToken"),
+      _refreshToken: localStorage.getItem("paceDropRefreshToken"),
+
+      async _fetch(path, options = {}) {
+        const headers = { "Content-Type": "application/json", ...options.headers };
+        if (this._token) headers["Authorization"] = "Bearer " + this._token;
+        const res = await fetch(PACEDROP_API + path, { ...options, headers });
+        if (res.status === 401) {
+          const data = await res.json();
+          if (data.code === "TOKEN_EXPIRED" && this._refreshToken) {
+            const refreshRes = await fetch(PACEDROP_API + "/auth/refresh", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ refreshToken: this._refreshToken }),
+            });
+            if (refreshRes.ok) {
+              const tokens = await refreshRes.json();
+              this.setTokens(tokens.accessToken, tokens.refreshToken);
+              headers["Authorization"] = "Bearer " + tokens.accessToken;
+              return fetch(PACEDROP_API + path, { ...options, headers });
+            } else {
+              this.clearTokens();
+              throw new Error("Session expired. Please log in again.");
+            }
+          }
+          throw new Error(data.error || "Unauthorized");
+        }
+        return res;
+      },
+
+      setTokens(access, refresh) {
+        this._token = access;
+        this._refreshToken = refresh;
+        localStorage.setItem("paceDropToken", access);
+        localStorage.setItem("paceDropRefreshToken", refresh);
+      },
+
+      clearTokens() {
+        this._token = null;
+        this._refreshToken = null;
+        localStorage.removeItem("paceDropToken");
+        localStorage.removeItem("paceDropRefreshToken");
+        localStorage.removeItem("paceDropUser");
+      },
+
+      isLoggedIn() { return !!this._token; },
+
+      // Auth
+      async register(email, password, displayName) {
+        const res = await fetch(PACEDROP_API + "/auth/register", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, displayName }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || data.errors?.[0]?.msg || "Registration failed");
+        this.setTokens(data.accessToken, data.refreshToken);
+        localStorage.setItem("paceDropUser", JSON.stringify(data.user));
+        return data;
+      },
+
+      async login(email, password) {
+        const res = await fetch(PACEDROP_API + "/auth/login", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Login failed");
+        this.setTokens(data.accessToken, data.refreshToken);
+        localStorage.setItem("paceDropUser", JSON.stringify(data.user));
+        return data;
+      },
+
+      async logout() {
+        try { await this._fetch("/auth/logout", { method: "POST" }); } catch {}
+        this.clearTokens();
+      },
+
+      async getMe() {
+        const res = await this._fetch("/auth/me");
+        return res.json();
+      },
+
+      // Playlists
+      async getPlaylists(page = 1) {
+        const res = await this._fetch("/playlists?page=" + page);
+        return res.json();
+      },
+
+      async getPlaylist(id) {
+        const res = await this._fetch("/playlists/" + id);
+        return res.json();
+      },
+
+      async savePlaylist(data) {
+        const res = await this._fetch("/playlists", { method: "POST", body: JSON.stringify(data) });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || "Save failed");
+        return result;
+      },
+
+      async toggleFavorite(id) {
+        const res = await this._fetch("/playlists/" + id + "/favorite", { method: "PATCH" });
+        return res.json();
+      },
+
+      // Race Plans
+      async getRacePlans() {
+        const res = await this._fetch("/race-plans");
+        return res.json();
+      },
+
+      async getRacePlan(id) {
+        const res = await this._fetch("/race-plans/" + id);
+        return res.json();
+      },
+
+      async saveRacePlan(data) {
+        const res = await this._fetch("/race-plans", { method: "POST", body: JSON.stringify(data) });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || "Save failed");
+        return result;
+      },
+
+      // Trails
+      async getTrails(q, difficulty) {
+        let url = "/trails?";
+        if (q) url += "q=" + encodeURIComponent(q) + "&";
+        if (difficulty) url += "difficulty=" + difficulty;
+        const res = await this._fetch(url);
+        return res.json();
+      },
+
+      async saveTrail(data) {
+        const res = await this._fetch("/trails", { method: "POST", body: JSON.stringify(data) });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || "Save failed");
+        return result;
+      },
+
+      // Activities
+      async getActivities(page = 1) {
+        const res = await this._fetch("/activities?page=" + page);
+        return res.json();
+      },
+
+      async importActivities(activities) {
+        const res = await this._fetch("/activities/bulk", { method: "POST", body: JSON.stringify({ activities }) });
+        return res.json();
+      },
+
+      async syncStrava() {
+        const res = await this._fetch("/activities/sync/strava", { method: "POST" });
+        return res.json();
+      },
+
+      // Personal Model
+      async getModel() {
+        const res = await this._fetch("/users/me/model");
+        return res.json();
+      },
+
+      async saveModel(model) {
+        const res = await this._fetch("/users/me/model", { method: "POST", body: JSON.stringify(model) });
+        return res.json();
+      },
+
+      // Settings
+      async updateSettings(settings) {
+        const res = await this._fetch("/users/me/settings", { method: "PUT", body: JSON.stringify(settings) });
+        return res.json();
+      },
+
+      // Spotify Taste
+      async saveSpotifyTaste(data) {
+        const res = await this._fetch("/spotify-taste", { method: "PUT", body: JSON.stringify(data) });
+        return res.json();
+      },
+
+      async getSpotifyTaste() {
+        const res = await this._fetch("/spotify-taste");
+        return res.json();
+      },
+    };
+
     // ============ UTILITY FUNCTIONS ============
     function generateRandomString(length) {
       const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -2389,10 +2577,21 @@
       if (response.status === 401) {
         const refreshToken = localStorage.getItem("spotifyRefreshToken");
         if (refreshToken) {
-          currentToken = await refreshSpotifyToken(refreshToken);
-          response = await fetch(`https://api.spotify.com/v1${endpoint}`, {
-            headers: { Authorization: `Bearer ${currentToken}` },
-          });
+          try {
+            currentToken = await refreshSpotifyToken(refreshToken);
+            response = await fetch(`https://api.spotify.com/v1${endpoint}`, {
+              headers: { Authorization: `Bearer ${currentToken}` },
+            });
+          } catch (refreshErr) {
+            // Refresh failed — clear stale tokens so UI shows disconnected
+            console.warn("Spotify token refresh failed, clearing session:", refreshErr);
+            localStorage.removeItem("spotifyAccessToken");
+            localStorage.removeItem("spotifyRefreshToken");
+            throw new Error("Spotify session expired. Please reconnect.");
+          }
+        } else {
+          localStorage.removeItem("spotifyAccessToken");
+          throw new Error("Spotify session expired. Please reconnect.");
         }
       }
 
@@ -2942,6 +3141,22 @@
       const [garminDragOver, setGarminDragOver] = useState(false);
       const [stravaDragOver, setStravaDragOver] = useState(false);
 
+      // === Account / Auth State ===
+      const [paceDropUser, setPaceDropUser] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("paceDropUser")); } catch { return null; }
+      });
+      const [showAuthModal, setShowAuthModal] = useState(false);
+      const [authMode, setAuthMode] = useState("login"); // "login" | "register"
+      const [authEmail, setAuthEmail] = useState("");
+      const [authPassword, setAuthPassword] = useState("");
+      const [authName, setAuthName] = useState("");
+      const [authError, setAuthError] = useState("");
+      const [authLoading, setAuthLoading] = useState(false);
+      const [showAccountMenu, setShowAccountMenu] = useState(false);
+      const [savedPlaylists, setSavedPlaylists] = useState([]);
+      const [showMyPlaylists, setShowMyPlaylists] = useState(false);
+      const [savingPlaylist, setSavingPlaylist] = useState(false);
+
       const MOOD_GENRES = [
         { id: "rock", label: "Rock", emoji: "🎸" },
         { id: "indie", label: "Indie", emoji: "🎶" },
@@ -2968,16 +3183,28 @@
           fetchSpotifyUser(token);
         }
 
-        // Restore Strava session
+        // Restore Strava session & rebuild personal model
         const stravaToken = localStorage.getItem("stravaAccessToken");
         if (stravaToken) {
           setStravaApiConnected(true);
+          // Rebuild model from demo data on restore (real Strava data isn't cached yet)
+          setStravaActivities(DEMO_STRAVA_ACTIVITIES);
+          const model = PerformanceLab.buildPersonalModel(DEMO_STRAVA_ACTIVITIES);
+          setPersonalModel(model);
+          setStravaConnected(true);
         }
 
         // Restore Garmin session
         const garminToken = localStorage.getItem("garminAccessToken");
         if (garminToken) {
           setGarminConnected(true);
+          // Also build model if not already built
+          if (!stravaToken) {
+            setStravaActivities(DEMO_STRAVA_ACTIVITIES);
+            const model = PerformanceLab.buildPersonalModel(DEMO_STRAVA_ACTIVITIES);
+            setPersonalModel(model);
+            setStravaConnected(true);
+          }
         }
 
         if (code) {
@@ -3352,6 +3579,12 @@
                 }
               } catch (err) {
                 console.warn("Spotify API error for segment", segIdx, err);
+                if (err.message?.includes("expired") || err.message?.includes("reconnect")) {
+                  // Session expired — clear token so user sees "reconnect" state
+                  setSpotifyToken(null);
+                  setSpotifyUser(null);
+                  setMessage({ type: "error", text: "Spotify session expired. Please reconnect to get personalized tracks." });
+                }
               }
             }
 
@@ -3359,6 +3592,7 @@
             if (!selectedTrack) {
               const mockCandidate = MOCK_TRACKS
                 .filter((t) => Math.abs(t.bpm - bpm) <= 20 && !usedTrackIds.has(t.uri))
+                .sort((a, b) => Math.abs(a.bpm - bpm) - Math.abs(b.bpm - bpm)) // closest BPM first
                 .slice(0, 1)[0];
               if (mockCandidate) {
                 usedTrackIds.add(mockCandidate.uri);
@@ -3470,15 +3704,293 @@
         reader.readAsText(file);
       };
 
+      // === Auth Handlers ===
+      const handleAuth = async (e) => {
+        e.preventDefault();
+        setAuthError("");
+        setAuthLoading(true);
+        try {
+          if (authMode === "register") {
+            const data = await PaceDropAPI.register(authEmail, authPassword, authName);
+            setPaceDropUser(data.user);
+          } else {
+            const data = await PaceDropAPI.login(authEmail, authPassword);
+            setPaceDropUser(data.user);
+          }
+          setShowAuthModal(false);
+          setAuthEmail(""); setAuthPassword(""); setAuthName("");
+          setMessage({ type: "success", text: "Welcome to PaceDrop!" });
+        } catch (err) {
+          setAuthError(err.message);
+        }
+        setAuthLoading(false);
+      };
+
+      const handleLogout = async () => {
+        await PaceDropAPI.logout();
+        setPaceDropUser(null);
+        setShowAccountMenu(false);
+        setMessage({ type: "success", text: "Logged out" });
+      };
+
+      const handleSavePlaylistToCloud = async () => {
+        if (!paceDropUser || !generatedPlaylist) return;
+        setSavingPlaylist(true);
+        try {
+          const trail = selectedTrail || gpxTrail;
+          const trackData = generatedPlaylist.tracks.map((t, i) => ({
+            segmentIndex: i, trackName: t.name, artistName: t.artist,
+            spotifyUri: t.uri, bpm: t.bpm, targetBpm: t.targetBpm || t.bpm,
+            popularity: t.popularity, score: t.score,
+            pacePerKm: t.pacePerKm, gradient: t.gradient,
+            terrainLabel: t.gradient > 0.008 ? "uphill" : t.gradient < -0.008 ? "downhill" : "flat",
+          }));
+          await PaceDropAPI.savePlaylist({
+            name: trail ? trail.name + " Playlist" : "PaceDrop Playlist",
+            musicMode: musicMode,
+            trailId: null,
+            tracks: trackData,
+          });
+          setMessage({ type: "success", text: "Playlist saved to your account!" });
+        } catch (err) {
+          setMessage({ type: "error", text: err.message });
+        }
+        setSavingPlaylist(false);
+      };
+
+      const handleLoadMyPlaylists = async () => {
+        if (!paceDropUser) return;
+        try {
+          const data = await PaceDropAPI.getPlaylists();
+          setSavedPlaylists(data.playlists || []);
+          setShowMyPlaylists(true);
+        } catch (err) {
+          setMessage({ type: "error", text: "Failed to load playlists" });
+        }
+      };
+
+      const handleGoogleLogin = () => {
+        window.location.href = PACEDROP_API + "/auth/google";
+      };
+
+      const handleStravaLogin = () => {
+        const clientId = process.env.STRAVA_CLIENT_ID || "211688";
+        const redirect = encodeURIComponent(window.location.origin + window.location.pathname);
+        window.location.href = "https://www.strava.com/oauth/authorize?client_id=" + clientId + "&response_type=code&redirect_uri=" + redirect + "&scope=read,activity:read&state=strava_sso";
+      };
+
+      // Check URL hash for OAuth redirect tokens
+      React.useEffect(() => {
+        const hash = window.location.hash;
+        if (hash.includes("auth=success")) {
+          const params = new URLSearchParams(hash.slice(1));
+          const accessToken = params.get("accessToken");
+          const refreshToken = params.get("refreshToken");
+          if (accessToken && refreshToken) {
+            PaceDropAPI.setTokens(accessToken, refreshToken);
+            PaceDropAPI.getMe().then((data) => {
+              setPaceDropUser(data.user);
+              localStorage.setItem("paceDropUser", JSON.stringify(data.user));
+              setMessage({ type: "success", text: "Welcome, " + data.user.display_name + "!" });
+            }).catch(() => {});
+            window.location.hash = "";
+          }
+        }
+      }, []);
+
       return (
         <div className="container">
-          <header>
+          <header style={{ position: "relative" }}>
             <div className="logo-container">
               <div className="logo-icon">&#9835;</div>
               <h1>PaceDrop</h1>
             </div>
             <p className="tagline">Every beat knows the trail</p>
+            {/* Account button — top right of header */}
+            <div style={{ position: "absolute", top: "16px", right: "16px", display: "flex", gap: "8px", alignItems: "center" }}>
+              {paceDropUser ? (
+                <div style={{ position: "relative" }}>
+                  <button onClick={() => setShowAccountMenu(!showAccountMenu)} style={{
+                    display: "flex", alignItems: "center", gap: "6px",
+                    padding: "6px 14px", borderRadius: "20px",
+                    background: "linear-gradient(135deg, var(--ember), #e85d04)",
+                    color: "white", border: "none", cursor: "pointer",
+                    fontSize: "0.8rem", fontWeight: 600,
+                  }}>
+                    <span style={{ width: "22px", height: "22px", borderRadius: "50%", background: "rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem" }}>
+                      {paceDropUser.displayName?.[0]?.toUpperCase() || "U"}
+                    </span>
+                    {paceDropUser.displayName || paceDropUser.email}
+                  </button>
+                  {showAccountMenu && (
+                    <div style={{
+                      position: "absolute", top: "40px", right: 0, zIndex: 100,
+                      background: "white", borderRadius: "10px", boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
+                      minWidth: "200px", overflow: "hidden", border: "1px solid rgba(0,0,0,0.08)",
+                    }}>
+                      <div style={{ padding: "14px 16px", borderBottom: "1px solid rgba(0,0,0,0.06)", fontSize: "0.8rem", color: "#666" }}>
+                        {paceDropUser.email}
+                      </div>
+                      <button onClick={handleLoadMyPlaylists} style={{
+                        display: "block", width: "100%", padding: "12px 16px", border: "none",
+                        background: "transparent", textAlign: "left", cursor: "pointer", fontSize: "0.85rem",
+                      }}>My Playlists</button>
+                      <button onClick={handleLogout} style={{
+                        display: "block", width: "100%", padding: "12px 16px", border: "none",
+                        background: "transparent", textAlign: "left", cursor: "pointer", fontSize: "0.85rem", color: "#c33",
+                      }}>Log Out</button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button onClick={() => { setShowAuthModal(true); setAuthMode("login"); }} style={{
+                  padding: "6px 16px", borderRadius: "20px",
+                  background: "linear-gradient(135deg, var(--ember), #e85d04)",
+                  color: "white", border: "none", cursor: "pointer",
+                  fontSize: "0.8rem", fontWeight: 600,
+                }}>Sign In</button>
+              )}
+            </div>
           </header>
+
+          {/* Auth Modal */}
+          {showAuthModal && (
+            <div style={{
+              position: "fixed", inset: 0, zIndex: 1000,
+              background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }} onClick={(e) => e.target === e.currentTarget && setShowAuthModal(false)}>
+              <div style={{
+                background: "white", borderRadius: "16px", padding: "32px",
+                width: "380px", maxWidth: "90vw", boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+                animation: "fadeIn 0.2s ease",
+              }}>
+                <h2 style={{ margin: "0 0 4px", fontSize: "1.4rem", background: "linear-gradient(135deg, var(--ember), #e85d04)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                  {authMode === "login" ? "Welcome Back" : "Create Account"}
+                </h2>
+                <p style={{ margin: "0 0 20px", fontSize: "0.85rem", color: "#666" }}>
+                  {authMode === "login" ? "Sign in to access your playlists and race plans" : "Join PaceDrop to save your playlists and data"}
+                </p>
+
+                {/* SSO buttons */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
+                  <button onClick={handleGoogleLogin} style={{
+                    padding: "10px", borderRadius: "8px", border: "1px solid #ddd",
+                    background: "white", cursor: "pointer", fontSize: "0.85rem",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                  }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+                    Continue with Google
+                  </button>
+                  <button onClick={() => { window.location.href = "https://accounts.spotify.com/authorize?client_id=" + (localStorage.getItem("spotifyClientId") || "") + "&response_type=code&redirect_uri=" + encodeURIComponent(window.location.origin + window.location.pathname) + "&scope=user-read-private%20user-read-email&state=spotify_sso"; }} style={{
+                    padding: "10px", borderRadius: "8px", border: "none",
+                    background: "#1DB954", color: "white", cursor: "pointer", fontSize: "0.85rem",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", fontWeight: 600,
+                  }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
+                    Continue with Spotify
+                  </button>
+                  <button onClick={handleStravaLogin} style={{
+                    padding: "10px", borderRadius: "8px", border: "none",
+                    background: "#FC4C02", color: "white", cursor: "pointer", fontSize: "0.85rem",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", fontWeight: 600,
+                  }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.599h4.172L10.463 0l-7 13.828h4.169"/></svg>
+                    Continue with Strava
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", margin: "16px 0", fontSize: "0.8rem", color: "#999" }}>
+                  <div style={{ flex: 1, height: "1px", background: "#e0e0e0" }} />
+                  or use email
+                  <div style={{ flex: 1, height: "1px", background: "#e0e0e0" }} />
+                </div>
+
+                <form onSubmit={handleAuth} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {authMode === "register" && (
+                    <input type="text" placeholder="Display Name" value={authName} onChange={(e) => setAuthName(e.target.value)} required style={{
+                      padding: "10px 14px", borderRadius: "8px", border: "1px solid #ddd",
+                      fontSize: "0.9rem", outline: "none",
+                    }} />
+                  )}
+                  <input type="email" placeholder="Email" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} required style={{
+                    padding: "10px 14px", borderRadius: "8px", border: "1px solid #ddd",
+                    fontSize: "0.9rem", outline: "none",
+                  }} />
+                  <input type="password" placeholder="Password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} required minLength={8} style={{
+                    padding: "10px 14px", borderRadius: "8px", border: "1px solid #ddd",
+                    fontSize: "0.9rem", outline: "none",
+                  }} />
+                  {authError && <div style={{ color: "#c33", fontSize: "0.8rem" }}>{authError}</div>}
+                  <button type="submit" disabled={authLoading} style={{
+                    padding: "12px", borderRadius: "8px", border: "none",
+                    background: "linear-gradient(135deg, var(--ember), #e85d04)",
+                    color: "white", fontWeight: 700, fontSize: "0.9rem", cursor: "pointer",
+                    opacity: authLoading ? 0.6 : 1,
+                  }}>
+                    {authLoading ? "..." : authMode === "login" ? "Sign In" : "Create Account"}
+                  </button>
+                </form>
+
+                <p style={{ margin: "14px 0 0", fontSize: "0.8rem", color: "#666", textAlign: "center" }}>
+                  {authMode === "login" ? "Don't have an account? " : "Already have an account? "}
+                  <a href="#" onClick={(e) => { e.preventDefault(); setAuthMode(authMode === "login" ? "register" : "login"); setAuthError(""); }} style={{ color: "var(--ember)", fontWeight: 600 }}>
+                    {authMode === "login" ? "Sign Up" : "Sign In"}
+                  </a>
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* My Playlists Drawer */}
+          {showMyPlaylists && (
+            <div style={{
+              position: "fixed", inset: 0, zIndex: 1000,
+              background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)",
+              display: "flex", justifyContent: "flex-end",
+            }} onClick={(e) => e.target === e.currentTarget && setShowMyPlaylists(false)}>
+              <div style={{
+                background: "white", width: "400px", maxWidth: "90vw", height: "100vh",
+                boxShadow: "-8px 0 32px rgba(0,0,0,0.15)", padding: "24px",
+                overflowY: "auto", animation: "fadeIn 0.2s ease",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+                  <h2 style={{ margin: 0, fontSize: "1.2rem" }}>My Playlists</h2>
+                  <button onClick={() => setShowMyPlaylists(false)} style={{
+                    border: "none", background: "transparent", fontSize: "1.4rem", cursor: "pointer", color: "#999",
+                  }}>&times;</button>
+                </div>
+                {savedPlaylists.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "40px 0", color: "#999" }}>
+                    <div style={{ fontSize: "2rem", marginBottom: "8px" }}>&#127925;</div>
+                    <p>No saved playlists yet.</p>
+                    <p style={{ fontSize: "0.85rem" }}>Generate a playlist and save it to see it here.</p>
+                  </div>
+                ) : (
+                  savedPlaylists.map((pl) => (
+                    <div key={pl.id} style={{
+                      padding: "14px", borderRadius: "10px", marginBottom: "10px",
+                      border: "1px solid rgba(0,0,0,0.06)", background: "rgba(0,0,0,0.01)",
+                    }}>
+                      <div style={{ fontWeight: 600, fontSize: "0.95rem" }}>{pl.name}</div>
+                      <div style={{ fontSize: "0.8rem", color: "#666", marginTop: "4px" }}>
+                        {pl.total_tracks} tracks &middot; {pl.music_mode} &middot; {new Date(pl.created_at).toLocaleDateString()}
+                      </div>
+                      {pl.trail_name && (
+                        <div style={{ fontSize: "0.75rem", color: "var(--ember)", marginTop: "2px" }}>{pl.trail_name}</div>
+                      )}
+                      {pl.spotify_url && (
+                        <a href={pl.spotify_url} target="_blank" rel="noopener" style={{
+                          display: "inline-block", marginTop: "6px", fontSize: "0.75rem",
+                          color: "#1DB954", fontWeight: 600,
+                        }}>Open in Spotify &rarr;</a>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Connections Bar — Spotify + Strava + Garmin */}
           <div style={{
@@ -4476,37 +4988,64 @@
                 BPM by Terrain
               </div>
               <div className="bpm-phases">
-                {generatedPlaylist.segments.map((seg, idx) => (
-                  <div key={idx} className="bpm-phase">
-                    <div className="bpm-phase-label">
-                      {seg.gradient > 0.05 ? "⬆️ Up" : seg.gradient < -0.05 ? "⬇️ Down" : "➡️ Flat"}
+                {generatedPlaylist.segments.map((seg, idx) => {
+                  const gradePercent = Math.round(Math.abs(seg.gradient) * 100);
+                  const isUp = seg.gradient > 0.008;
+                  const isDown = seg.gradient < -0.008;
+                  // Find matching racePlan segment for pace
+                  let paceStr = "";
+                  if (racePlan && racePlan.segments.length > 0) {
+                    const rpLen = racePlan.segments.length;
+                    const rpIdx = Math.min(rpLen - 1, Math.floor((idx / generatedPlaylist.segments.length) * rpLen));
+                    paceStr = PerformanceLab.formatPace(racePlan.segments[rpIdx].paceSec);
+                  }
+                  return (
+                    <div key={idx} className="bpm-phase" style={{
+                      borderLeft: isUp ? "3px solid var(--ember)" : isDown ? "3px solid var(--glacier)" : "3px solid var(--stone-200)",
+                    }}>
+                      <div className="bpm-phase-label" style={{
+                        color: isUp ? "var(--ember)" : isDown ? "var(--glacier)" : "var(--stone-400)",
+                        fontWeight: 600,
+                      }}>
+                        {isUp ? `↗ +${gradePercent}%` : isDown ? `↘ −${gradePercent}%` : "→ flat"}
+                      </div>
+                      <div className="bpm-phase-value">{seg.bpm}</div>
+                      {paceStr && <div style={{ fontSize: "0.6rem", color: "var(--stone-400)", marginTop: "2px" }}>{paceStr}/km</div>}
                     </div>
-                    <div className="bpm-phase-value">{seg.bpm}</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               <div className="control-label" style={{ marginTop: "20px", marginBottom: "12px" }}>
                 Tracks ({generatedPlaylist.tracks.length})
               </div>
               <div className="tracks-list">
-                {generatedPlaylist.tracks.map((track, idx) => (
-                  <div key={idx} className="track-item">
-                    <div className="track-thumbnail">{idx + 1}</div>
-                    <div className="track-info">
-                      <div className="track-name">{track.name}</div>
-                      <div className="track-artist">
-                        {track.artist}
-                        {track.score > 0 && (
-                          <span style={{ marginLeft: "8px", color: "var(--stone-400)", fontSize: "0.75rem" }}>
-                            ★ {Math.round(track.score)}
-                          </span>
-                        )}
+                {generatedPlaylist.tracks.map((track, idx) => {
+                  const seg = generatedPlaylist.segments[idx];
+                  const isUp = seg && seg.gradient > 0.008;
+                  const isDown = seg && seg.gradient < -0.008;
+                  let paceStr = "";
+                  if (racePlan && racePlan.segments.length > 0) {
+                    const rpLen = racePlan.segments.length;
+                    const rpIdx = Math.min(rpLen - 1, Math.floor((idx / generatedPlaylist.segments.length) * rpLen));
+                    paceStr = PerformanceLab.formatPace(racePlan.segments[rpIdx].paceSec);
+                  }
+                  return (
+                    <div key={idx} className="track-item" style={{
+                      borderLeft: isUp ? "3px solid var(--ember)" : isDown ? "3px solid var(--glacier)" : "3px solid transparent",
+                    }}>
+                      <div className="track-thumbnail">{idx + 1}</div>
+                      <div className="track-info">
+                        <div className="track-name">{track.name}</div>
+                        <div className="track-artist">
+                          {track.artist}
+                          {paceStr && <span style={{ marginLeft: "8px", color: "var(--stone-400)", fontSize: "0.72rem" }}>@ {paceStr}/km</span>}
+                        </div>
                       </div>
+                      <div className="track-bpm">{track.bpm} BPM</div>
                     </div>
-                    <div className="track-bpm">{track.bpm} BPM</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Run Drop Card */}
@@ -4520,6 +5059,34 @@
                   disabled={loading}
                 >
                   {loading ? "Saving..." : "Save to Spotify"}
+                </button>
+              )}
+              {/* Save to PaceDrop Cloud */}
+              {paceDropUser ? (
+                <button
+                  className="btn"
+                  style={{
+                    width: "100%", padding: "14px", marginTop: "8px", fontSize: "1rem",
+                    background: "linear-gradient(135deg, #2d3436, #636e72)",
+                    color: "white", border: "none", borderRadius: "10px", cursor: "pointer",
+                    opacity: savingPlaylist ? 0.6 : 1,
+                  }}
+                  onClick={handleSavePlaylistToCloud}
+                  disabled={savingPlaylist}
+                >
+                  {savingPlaylist ? "Saving..." : "Save to My Account"}
+                </button>
+              ) : (
+                <button
+                  className="btn"
+                  style={{
+                    width: "100%", padding: "14px", marginTop: "8px", fontSize: "0.9rem",
+                    background: "transparent", color: "var(--ember)", border: "1px solid var(--ember)",
+                    borderRadius: "10px", cursor: "pointer",
+                  }}
+                  onClick={() => { setShowAuthModal(true); setAuthMode("register"); }}
+                >
+                  Sign up to save playlists
                 </button>
               )}
             </div>
