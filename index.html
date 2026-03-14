@@ -1038,6 +1038,9 @@
     const SPOTIFY_REDIRECT_URI = "https://benjaminhaycraft.github.io/pacesync/";
     const SPOTIFY_SCOPES = "playlist-modify-public playlist-modify-private user-read-private user-top-read";
 
+    const STRAVA_CLIENT_ID = "148498";
+    const STRAVA_REDIRECT_URI = "https://benjaminhaycraft.github.io/pacesync/";
+
     const TRAIL_DATABASE = [
       // === French Trails (Original) ===
       {
@@ -1338,6 +1341,104 @@
       { name: "Sunset Trail", artist: "Golden Hour", bpm: 128, uri: "spotify:track:mock25" },
     ];
 
+    const DEMO_STRAVA_ACTIVITIES = [
+      {
+        id: 1, name: "Easy morning run", type: "Run", distance: 8200, moving_time: 2870, elapsed_time: 3000,
+        total_elevation_gain: 45, average_heartrate: 142, max_heartrate: 158, average_cadence: 82,
+        start_date: "2026-02-28T07:30:00Z",
+        splits: [
+          { distance: 1000, moving_time: 340, elevation_difference: 5, average_heartrate: 138, average_cadence: 81 },
+          { distance: 1000, moving_time: 348, elevation_difference: 8, average_heartrate: 140, average_cadence: 81 },
+          { distance: 1000, moving_time: 355, elevation_difference: -3, average_heartrate: 141, average_cadence: 82 },
+          { distance: 1000, moving_time: 350, elevation_difference: 12, average_heartrate: 143, average_cadence: 82 },
+          { distance: 1000, moving_time: 342, elevation_difference: -8, average_heartrate: 142, average_cadence: 83 },
+          { distance: 1000, moving_time: 358, elevation_difference: 15, average_heartrate: 144, average_cadence: 82 },
+          { distance: 1000, moving_time: 345, elevation_difference: -5, average_heartrate: 143, average_cadence: 82 },
+          { distance: 1000, moving_time: 332, elevation_difference: -10, average_heartrate: 145, average_cadence: 83 },
+        ],
+      },
+      {
+        id: 2, name: "Tempo run", type: "Run", distance: 10100, moving_time: 2730, elapsed_time: 2800,
+        total_elevation_gain: 30, average_heartrate: 162, max_heartrate: 178, average_cadence: 87,
+        start_date: "2026-03-02T18:00:00Z",
+        splits: [
+          { distance: 1000, moving_time: 290, elevation_difference: 2, average_heartrate: 155, average_cadence: 85 },
+          { distance: 1000, moving_time: 275, elevation_difference: 5, average_heartrate: 158, average_cadence: 86 },
+          { distance: 1000, moving_time: 268, elevation_difference: -3, average_heartrate: 161, average_cadence: 87 },
+          { distance: 1000, moving_time: 265, elevation_difference: 0, average_heartrate: 163, average_cadence: 88 },
+          { distance: 1000, moving_time: 270, elevation_difference: 8, average_heartrate: 165, average_cadence: 87 },
+          { distance: 1000, moving_time: 260, elevation_difference: -4, average_heartrate: 164, average_cadence: 88 },
+          { distance: 1000, moving_time: 268, elevation_difference: 3, average_heartrate: 166, average_cadence: 87 },
+          { distance: 1000, moving_time: 272, elevation_difference: 10, average_heartrate: 168, average_cadence: 87 },
+          { distance: 1000, moving_time: 275, elevation_difference: -2, average_heartrate: 170, average_cadence: 86 },
+          { distance: 1000, moving_time: 287, elevation_difference: -5, average_heartrate: 172, average_cadence: 85 },
+        ],
+      },
+      {
+        id: 3, name: "Trail run - forest hills", type: "Run", distance: 14500, moving_time: 5800, elapsed_time: 6200,
+        total_elevation_gain: 620, average_heartrate: 152, max_heartrate: 175, average_cadence: 80,
+        start_date: "2026-03-05T09:00:00Z",
+        splits: [
+          { distance: 1000, moving_time: 380, elevation_difference: 35, average_heartrate: 148, average_cadence: 78 },
+          { distance: 1000, moving_time: 420, elevation_difference: 65, average_heartrate: 155, average_cadence: 75 },
+          { distance: 1000, moving_time: 450, elevation_difference: 80, average_heartrate: 162, average_cadence: 73 },
+          { distance: 1000, moving_time: 360, elevation_difference: -40, average_heartrate: 145, average_cadence: 82 },
+          { distance: 1000, moving_time: 340, elevation_difference: -55, average_heartrate: 140, average_cadence: 84 },
+          { distance: 1000, moving_time: 410, elevation_difference: 70, average_heartrate: 158, average_cadence: 76 },
+          { distance: 1000, moving_time: 440, elevation_difference: 85, average_heartrate: 165, average_cadence: 74 },
+          { distance: 1000, moving_time: 380, elevation_difference: -30, average_heartrate: 148, average_cadence: 81 },
+          { distance: 1000, moving_time: 350, elevation_difference: -50, average_heartrate: 142, average_cadence: 83 },
+          { distance: 1000, moving_time: 395, elevation_difference: 55, average_heartrate: 155, average_cadence: 77 },
+          { distance: 1000, moving_time: 430, elevation_difference: 75, average_heartrate: 163, average_cadence: 74 },
+          { distance: 1000, moving_time: 370, elevation_difference: -25, average_heartrate: 150, average_cadence: 80 },
+          { distance: 1000, moving_time: 360, elevation_difference: -60, average_heartrate: 144, average_cadence: 82 },
+          { distance: 1000, moving_time: 315, elevation_difference: -80, average_heartrate: 138, average_cadence: 85 },
+        ],
+      },
+      {
+        id: 4, name: "Long run - half marathon pace", type: "Run", distance: 21200, moving_time: 6200, elapsed_time: 6500,
+        total_elevation_gain: 120, average_heartrate: 155, max_heartrate: 172, average_cadence: 84,
+        start_date: "2026-03-08T08:00:00Z",
+        splits: [
+          { distance: 1000, moving_time: 300, elevation_difference: 5, average_heartrate: 148, average_cadence: 84 },
+          { distance: 1000, moving_time: 298, elevation_difference: 3, average_heartrate: 150, average_cadence: 84 },
+          { distance: 1000, moving_time: 295, elevation_difference: -2, average_heartrate: 151, average_cadence: 85 },
+          { distance: 1000, moving_time: 292, elevation_difference: 8, average_heartrate: 152, average_cadence: 85 },
+          { distance: 1000, moving_time: 290, elevation_difference: -5, average_heartrate: 153, average_cadence: 85 },
+          { distance: 1000, moving_time: 288, elevation_difference: 10, average_heartrate: 154, average_cadence: 85 },
+          { distance: 1000, moving_time: 290, elevation_difference: -3, average_heartrate: 154, average_cadence: 85 },
+          { distance: 1000, moving_time: 292, elevation_difference: 7, average_heartrate: 155, average_cadence: 84 },
+          { distance: 1000, moving_time: 295, elevation_difference: -4, average_heartrate: 156, average_cadence: 84 },
+          { distance: 1000, moving_time: 293, elevation_difference: 5, average_heartrate: 156, average_cadence: 84 },
+          { distance: 1000, moving_time: 290, elevation_difference: -8, average_heartrate: 157, average_cadence: 84 },
+          { distance: 1000, moving_time: 288, elevation_difference: 3, average_heartrate: 157, average_cadence: 84 },
+          { distance: 1000, moving_time: 292, elevation_difference: 12, average_heartrate: 158, average_cadence: 84 },
+          { distance: 1000, moving_time: 295, elevation_difference: -6, average_heartrate: 159, average_cadence: 83 },
+          { distance: 1000, moving_time: 298, elevation_difference: 8, average_heartrate: 160, average_cadence: 83 },
+          { distance: 1000, moving_time: 300, elevation_difference: -3, average_heartrate: 161, average_cadence: 83 },
+          { distance: 1000, moving_time: 305, elevation_difference: 5, average_heartrate: 162, average_cadence: 82 },
+          { distance: 1000, moving_time: 310, elevation_difference: -7, average_heartrate: 163, average_cadence: 82 },
+          { distance: 1000, moving_time: 312, elevation_difference: 3, average_heartrate: 164, average_cadence: 82 },
+          { distance: 1000, moving_time: 308, elevation_difference: -10, average_heartrate: 165, average_cadence: 82 },
+          { distance: 1000, moving_time: 295, elevation_difference: -15, average_heartrate: 166, average_cadence: 83 },
+        ],
+      },
+      {
+        id: 5, name: "Hill repeats", type: "Run", distance: 6800, moving_time: 2550, elapsed_time: 3000,
+        total_elevation_gain: 380, average_heartrate: 158, max_heartrate: 182, average_cadence: 79,
+        start_date: "2026-03-10T17:30:00Z",
+        splits: [
+          { distance: 1000, moving_time: 330, elevation_difference: 5, average_heartrate: 145, average_cadence: 82 },
+          { distance: 1000, moving_time: 420, elevation_difference: 90, average_heartrate: 168, average_cadence: 74 },
+          { distance: 1000, moving_time: 310, elevation_difference: -85, average_heartrate: 148, average_cadence: 85 },
+          { distance: 1000, moving_time: 425, elevation_difference: 95, average_heartrate: 172, average_cadence: 73 },
+          { distance: 1000, moving_time: 315, elevation_difference: -88, average_heartrate: 150, average_cadence: 84 },
+          { distance: 1000, moving_time: 430, elevation_difference: 92, average_heartrate: 175, average_cadence: 72 },
+          { distance: 800, moving_time: 320, elevation_difference: -70, average_heartrate: 155, average_cadence: 83 },
+        ],
+      },
+    ];
+
     // ============ UTILITY FUNCTIONS ============
     function generateRandomString(length) {
       const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -1429,6 +1530,195 @@
         Math.cos(phi1) * Math.cos(phi2) * Math.sin(dLambda / 2) ** 2;
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
+
+    const PerformanceLab = {
+      // ── Minetti et al. 2002 energy cost model ──
+      // Returns energy cost in J/kg/m for a given grade (as decimal, e.g. 0.05 = 5%)
+      energyCost(grade) {
+        // Polynomial from Minetti 2002: C = 155.4i^5 - 30.4i^4 - 43.3i^3 + 46.3i^2 + 19.5i + 3.6
+        // where i = grade as fraction, C = J/kg/m
+        const i = grade;
+        return 155.4*Math.pow(i,5) - 30.4*Math.pow(i,4) - 43.3*Math.pow(i,3) + 46.3*Math.pow(i,2) + 19.5*i + 3.6;
+      },
+
+      // ── Grade Adjusted Pace ──
+      // Given flat pace (sec/km) and grade (decimal), return adjusted pace
+      gradeAdjustedPace(flatPaceSec, grade) {
+        const flatCost = this.energyCost(0);
+        const gradeCost = this.energyCost(grade);
+        return flatPaceSec * (gradeCost / flatCost);
+      },
+
+      // ── Build personal model from activity splits ──
+      buildPersonalModel(activities) {
+        const splits = [];
+        let totalDistanceM = 0;
+        let totalTimeS = 0;
+
+        activities.forEach(act => {
+          if (!act.splits) return;
+          const actDistKm = act.distance / 1000;
+          let cumulativeKm = 0;
+
+          act.splits.forEach((s, idx) => {
+            const distKm = s.distance / 1000;
+            cumulativeKm += distKm;
+            const paceSecPerKm = s.moving_time / distKm;
+            const gradeDecimal = (s.elevation_difference || 0) / s.distance;
+            const cadenceSpm = (s.average_cadence || 80) * 2;
+            const fractionOfRun = cumulativeKm / actDistKm;
+
+            splits.push({
+              pace: paceSecPerKm,
+              grade: gradeDecimal,
+              hr: s.average_heartrate || 0,
+              cadence: cadenceSpm,
+              fraction: fractionOfRun,
+              totalDistKm: actDistKm,
+            });
+          });
+
+          totalDistanceM += act.distance;
+          totalTimeS += act.moving_time;
+        });
+
+        if (splits.length === 0) return null;
+
+        // ── 1. Pace-Grade Model ──
+        const grades = splits.map(s => s.grade);
+        const paces = splits.map(s => s.pace);
+        const n = splits.length;
+        const sumG = grades.reduce((a,b) => a+b, 0);
+        const sumP = paces.reduce((a,b) => a+b, 0);
+        const sumGP = grades.reduce((a,g,i) => a + g*paces[i], 0);
+        const sumG2 = grades.reduce((a,g) => a + g*g, 0);
+        const gradeCoeff = (n * sumGP - sumG * sumP) / (n * sumG2 - sumG * sumG) || 0;
+        const basePace = (sumP - gradeCoeff * sumG) / n;
+
+        // ── 2. Cadence-Grade Model ──
+        const cadences = splits.map(s => s.cadence);
+        const sumC = cadences.reduce((a,b) => a+b, 0);
+        const sumGC = grades.reduce((a,g,i) => a + g*cadences[i], 0);
+        const cadenceGradeCoeff = (n * sumGC - sumG * sumC) / (n * sumG2 - sumG * sumG) || 0;
+        const baseCadence = (sumC - cadenceGradeCoeff * sumG) / n;
+
+        // ── 3. Fatigue Curve ──
+        const quintiles = [0.2, 0.4, 0.6, 0.8, 1.0];
+        const hrByQuintile = quintiles.map(q => {
+          const bucket = splits.filter(s => s.fraction <= q && s.fraction > q - 0.2 && s.hr > 0);
+          if (bucket.length === 0) return 0;
+          return bucket.reduce((a,s) => a + s.hr, 0) / bucket.length;
+        });
+        const hrDrift = hrByQuintile[0] > 0 ? (hrByQuintile[4] - hrByQuintile[0]) / hrByQuintile[0] : 0;
+
+        // ── 4. Avg stats ──
+        const avgPace = totalTimeS / (totalDistanceM / 1000);
+        const avgCadence = baseCadence;
+        const avgHR = splits.filter(s => s.hr > 0).reduce((a,s) => a + s.hr, 0) / splits.filter(s => s.hr > 0).length || 150;
+        const maxHR = Math.max(...activities.map(a => a.max_heartrate || 0));
+
+        return {
+          basePace: Math.round(basePace),
+          gradeCoeff: Math.round(gradeCoeff),
+          baseCadence: Math.round(baseCadence),
+          cadenceGradeCoeff: Math.round(cadenceGradeCoeff),
+          hrDrift,
+          hrByQuintile,
+          avgPace: Math.round(avgPace),
+          avgCadence: Math.round(avgCadence),
+          avgHR: Math.round(avgHR),
+          maxHR,
+          totalRuns: activities.length,
+          totalKm: Math.round(totalDistanceM / 1000),
+          splitCount: n,
+        };
+      },
+
+      // ── Compute optimal race plan ──
+      computeRacePlan(model, profile, distanceKm, targetTimeSec) {
+        if (!model || !profile || profile.length < 2) return null;
+
+        const numSegments = profile.length - 1;
+        const segmentDistKm = distanceKm / numSegments;
+        const segments = [];
+
+        let totalEnergyCost = 0;
+        const segmentData = [];
+        for (let i = 0; i < numSegments; i++) {
+          const elevDiff = profile[i+1] - profile[i];
+          const grade = elevDiff / (segmentDistKm * 1000);
+          const cost = this.energyCost(grade);
+          segmentData.push({ grade, cost, elevDiff });
+          totalEnergyCost += cost;
+        }
+
+        const avgCostPerSeg = totalEnergyCost / numSegments;
+
+        for (let i = 0; i < numSegments; i++) {
+          const { grade, cost, elevDiff } = segmentData[i];
+          const timeFraction = cost / totalEnergyCost;
+          const segTimeSec = targetTimeSec * timeFraction;
+          const paceSec = segTimeSec / segmentDistKm;
+
+          // ── Fatigue adjustment ──
+          const raceProgress = (i + 0.5) / numSegments;
+          let fatigueMultiplier = 1.0;
+          if (raceProgress < 0.33) fatigueMultiplier = 0.97;
+          else if (raceProgress > 0.67) fatigueMultiplier = 1.03;
+
+          // ── Personal cadence for this grade ──
+          const cadence = Math.round(
+            Math.max(140, Math.min(190,
+              model.baseCadence + model.cadenceGradeCoeff * grade
+            ))
+          );
+
+          const targetBpm = Math.round(cadence * fatigueMultiplier);
+
+          let emotionalZone;
+          if (raceProgress < 0.3) emotionalZone = "controlled";
+          else if (raceProgress < 0.7) emotionalZone = "dissociative";
+          else emotionalZone = "motivational";
+
+          const estimatedHR = Math.round(model.avgHR * (0.92 + 0.16 * raceProgress + grade * 2));
+          const hrZone = estimatedHR < model.maxHR * 0.7 ? "Z2" :
+                         estimatedHR < model.maxHR * 0.8 ? "Z3" :
+                         estimatedHR < model.maxHR * 0.9 ? "Z4" : "Z5";
+
+          segments.push({
+            index: i,
+            grade: Math.round(grade * 1000) / 10,
+            elevDiff: Math.round(elevDiff),
+            paceSec: Math.round(paceSec / fatigueMultiplier),
+            cadence,
+            targetBpm: Math.max(120, Math.min(185, targetBpm)),
+            emotionalZone,
+            estimatedHR,
+            hrZone,
+            energyCost: Math.round(cost * 10) / 10,
+          });
+        }
+
+        const totalTime = segments.reduce((a, s) => a + s.paceSec * segmentDistKm, 0);
+        const avgPace = totalTime / distanceKm;
+
+        return {
+          segments,
+          segmentDistKm: Math.round(segmentDistKm * 100) / 100,
+          totalTimeEstimate: Math.round(totalTime),
+          avgPace: Math.round(avgPace),
+          strategy: "constant-effort",
+          model,
+        };
+      },
+
+      // Format pace (sec/km) to min:ss string
+      formatPace(secPerKm) {
+        const min = Math.floor(secPerKm / 60);
+        const sec = Math.round(secPerKm % 60);
+        return `${min}:${sec.toString().padStart(2, "0")}`;
+      },
+    };
 
     function processGPXPoints(points) {
       if (!points || points.length < 2) {
@@ -1532,6 +1822,17 @@
       const data = await response.json();
       localStorage.setItem("spotifyAccessToken", data.access_token);
       return data.access_token;
+    }
+
+    function startStravaAuth() {
+      const params = new URLSearchParams({
+        client_id: STRAVA_CLIENT_ID,
+        redirect_uri: STRAVA_REDIRECT_URI,
+        response_type: "code",
+        scope: "read,activity:read_all",
+        approval_prompt: "auto",
+      });
+      window.location.href = `https://www.strava.com/oauth/authorize?${params.toString()}`;
     }
 
     async function spotifyFetch(token, endpoint) {
@@ -2082,6 +2383,11 @@
       const [selectedMood, setSelectedMood] = useState(null);
       const [trailSearch, setTrailSearch] = useState("");
       const [trailFilter, setTrailFilter] = useState("all"); // "all", "road", "trail", "upcoming"
+      const [stravaConnected, setStravaConnected] = useState(false);
+      const [stravaActivities, setStravaActivities] = useState(null);
+      const [personalModel, setPersonalModel] = useState(null);
+      const [racePlan, setRacePlan] = useState(null);
+      const [showPerformanceLab, setShowPerformanceLab] = useState(false);
 
       const MOOD_GENRES = [
         { id: "rock", label: "Rock", emoji: "🎸" },
@@ -2233,6 +2539,23 @@
         }
       }, [currentTrail?.id, trailDistance]);
 
+      // Compute race plan when personal model and trail are both available
+      React.useEffect(() => {
+        if (personalModel && currentTrail) {
+          const distKm = currentTrail.distance;
+          let targetSec;
+          if (targetMode === "time") {
+            targetSec = (targetTimeHours * 3600) + (targetTimeMinutes * 60);
+          } else {
+            targetSec = personalModel.basePace * distKm;
+          }
+          const plan = PerformanceLab.computeRacePlan(personalModel, currentTrail.profile, distKm, targetSec);
+          setRacePlan(plan);
+        } else {
+          setRacePlan(null);
+        }
+      }, [personalModel, currentTrail, targetMode, targetTimeHours, targetTimeMinutes]);
+
       let paceMin = targetPace;
       let estimatedTime = 0;
 
@@ -2316,7 +2639,13 @@
             const progress = totalSegments > 1 ? segIdx / (totalSegments - 1) : 1;
             const progressionFactor = 0.88 + 0.17 * Math.pow(progress, 1.3);
             const rawBpm = gradientToBpm(seg.gradient, baseBpm);
-            const bpm = Math.round(Math.max(95, Math.min(185, rawBpm * progressionFactor)));
+            let bpm;
+            if (racePlan && racePlan.segments[segIdx]) {
+              // Use data-science driven BPM from personal model
+              bpm = racePlan.segments[segIdx].targetBpm;
+            } else {
+              bpm = Math.round(Math.max(95, Math.min(185, rawBpm * progressionFactor)));
+            }
             let selectedTrack = null;
 
             if (spotifyToken) {
@@ -2663,6 +2992,196 @@
               {message.text}
             </div>
           )}
+
+          {/* Performance Lab */}
+          <div className="section">
+            <div className="section-title" style={{ cursor: "pointer" }} onClick={() => setShowPerformanceLab(!showPerformanceLab)}>
+              <span className="section-icon">🧬</span>
+              Performance Lab
+              <span style={{ marginLeft: "auto", fontSize: "0.8rem", color: "var(--slate-400)", fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>
+                {showPerformanceLab ? "Hide" : "Show"}
+              </span>
+            </div>
+
+            {showPerformanceLab && (
+              <div>
+                {/* Strava Connect */}
+                <div style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "14px 18px", background: stravaConnected ? "rgba(228,90,59,0.04)" : "var(--cloud)",
+                  borderRadius: "10px", marginBottom: "16px",
+                  border: stravaConnected ? "1.5px solid var(--coral)" : "1.5px solid transparent"
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: "0.85rem", color: "var(--navy)" }}>
+                      {stravaConnected ? "Training Data Loaded" : "Connect Training Data"}
+                    </div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--slate-400)", marginTop: "2px" }}>
+                      {stravaConnected && personalModel
+                        ? `${personalModel.totalRuns} runs · ${personalModel.totalKm}km · ${personalModel.splitCount} data points analyzed`
+                        : "Import your Strava/Garmin history to unlock personal optimization"}
+                    </div>
+                  </div>
+                  <button
+                    className={stravaConnected ? "btn btn-danger" : "btn btn-primary"}
+                    style={{ fontSize: "0.75rem", padding: "8px 16px" }}
+                    onClick={() => {
+                      if (stravaConnected) {
+                        setStravaConnected(false);
+                        setStravaActivities(null);
+                        setPersonalModel(null);
+                        setRacePlan(null);
+                      } else {
+                        // Load demo data
+                        setStravaActivities(DEMO_STRAVA_ACTIVITIES);
+                        const model = PerformanceLab.buildPersonalModel(DEMO_STRAVA_ACTIVITIES);
+                        setPersonalModel(model);
+                        setStravaConnected(true);
+                        setMessage({ type: "success", text: "Training data loaded! Your personal model is ready." });
+                      }
+                    }}
+                  >
+                    {stravaConnected ? "Disconnect" : "Load Demo Data"}
+                  </button>
+                </div>
+
+                {/* Personal Model Display */}
+                {personalModel && (
+                  <div style={{ marginBottom: "16px" }}>
+                    <div style={{
+                      fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase",
+                      letterSpacing: "1.5px", color: "var(--slate-400)", marginBottom: "12px"
+                    }}>
+                      Your Running DNA
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "10px" }}>
+                      {[
+                        { label: "Flat Pace", value: PerformanceLab.formatPace(personalModel.basePace), unit: "/km" },
+                        { label: "Cadence", value: personalModel.baseCadence, unit: "spm" },
+                        { label: "Avg HR", value: personalModel.avgHR, unit: "bpm" },
+                        { label: "Max HR", value: personalModel.maxHR, unit: "bpm" },
+                        { label: "HR Drift", value: `${(personalModel.hrDrift * 100).toFixed(1)}%`, unit: "per run" },
+                        { label: "Climb Cost", value: personalModel.gradeCoeff > 0 ? `+${Math.round(personalModel.gradeCoeff / 10)}` : Math.round(personalModel.gradeCoeff / 10), unit: "s/km/%" },
+                      ].map((stat, i) => (
+                        <div key={i} style={{
+                          background: "var(--cloud)", borderRadius: "10px", padding: "12px",
+                          textAlign: "center"
+                        }}>
+                          <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--navy)" }}>
+                            {stat.value}
+                          </div>
+                          <div style={{ fontSize: "0.65rem", color: "var(--slate-400)", textTransform: "uppercase", letterSpacing: "0.8px", marginTop: "2px" }}>
+                            {stat.label}
+                          </div>
+                          <div style={{ fontSize: "0.6rem", color: "var(--slate-400)" }}>
+                            {stat.unit}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Race Plan */}
+                {racePlan && currentTrail && (
+                  <div>
+                    <div style={{
+                      fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase",
+                      letterSpacing: "1.5px", color: "var(--slate-400)", marginBottom: "12px"
+                    }}>
+                      Race Strategy — {currentTrail.name}
+                    </div>
+
+                    {/* Summary Bar */}
+                    <div style={{
+                      display: "flex", gap: "12px", marginBottom: "16px", flexWrap: "wrap"
+                    }}>
+                      {[
+                        { label: "Est. Time", value: `${Math.floor(racePlan.totalTimeEstimate / 3600)}h${Math.round((racePlan.totalTimeEstimate % 3600) / 60).toString().padStart(2,"0")}` },
+                        { label: "Avg Pace", value: PerformanceLab.formatPace(racePlan.avgPace) + "/km" },
+                        { label: "Strategy", value: "Constant Effort" },
+                        { label: "Segments", value: racePlan.segments.length },
+                      ].map((s, i) => (
+                        <div key={i} style={{
+                          flex: "1 1 auto", padding: "10px 14px", background: "var(--cloud)",
+                          borderRadius: "8px", textAlign: "center", minWidth: "100px"
+                        }}>
+                          <div style={{ fontWeight: 800, fontSize: "0.95rem", color: "var(--navy)" }}>{s.value}</div>
+                          <div style={{ fontSize: "0.6rem", color: "var(--slate-400)", textTransform: "uppercase", letterSpacing: "0.8px" }}>{s.label}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Segment Breakdown Table */}
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{
+                        width: "100%", borderCollapse: "collapse", fontSize: "0.75rem",
+                      }}>
+                        <thead>
+                          <tr style={{ borderBottom: "2px solid var(--slate-200)" }}>
+                            {["Seg", "Grade", "Pace", "Cadence", "BPM", "HR Zone", "Arc"].map(h => (
+                              <th key={h} style={{
+                                padding: "8px 6px", textAlign: "center", fontWeight: 700,
+                                textTransform: "uppercase", letterSpacing: "0.8px", fontSize: "0.6rem",
+                                color: "var(--slate-400)"
+                              }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {racePlan.segments.map((seg, idx) => (
+                            <tr key={idx} style={{
+                              borderBottom: "1px solid var(--slate-100)",
+                              background: seg.emotionalZone === "motivational" ? "rgba(228,90,59,0.03)" : "transparent"
+                            }}>
+                              <td style={{ padding: "8px 6px", textAlign: "center", fontWeight: 700, color: "var(--navy)" }}>
+                                {idx + 1}
+                              </td>
+                              <td style={{ padding: "8px 6px", textAlign: "center", color: seg.grade > 2 ? "var(--coral)" : seg.grade < -2 ? "var(--teal)" : "var(--slate-600)" }}>
+                                {seg.grade > 0 ? "+" : ""}{seg.grade}%
+                              </td>
+                              <td style={{ padding: "8px 6px", textAlign: "center", fontWeight: 600 }}>
+                                {PerformanceLab.formatPace(seg.paceSec)}
+                              </td>
+                              <td style={{ padding: "8px 6px", textAlign: "center" }}>
+                                {seg.cadence}
+                              </td>
+                              <td style={{ padding: "8px 6px", textAlign: "center", fontWeight: 700, color: "var(--coral)" }}>
+                                {seg.targetBpm}
+                              </td>
+                              <td style={{ padding: "8px 6px", textAlign: "center" }}>
+                                <span style={{
+                                  padding: "2px 8px", borderRadius: "10px", fontSize: "0.65rem", fontWeight: 700,
+                                  background: seg.hrZone === "Z2" ? "rgba(15,166,138,0.1)" :
+                                             seg.hrZone === "Z3" ? "rgba(45,108,223,0.1)" :
+                                             seg.hrZone === "Z4" ? "rgba(255,140,66,0.1)" : "rgba(228,90,59,0.1)",
+                                  color: seg.hrZone === "Z2" ? "var(--teal)" :
+                                         seg.hrZone === "Z3" ? "var(--accent-blue)" :
+                                         seg.hrZone === "Z4" ? "var(--amber)" : "var(--coral)"
+                                }}>
+                                  {seg.hrZone}
+                                </span>
+                              </td>
+                              <td style={{ padding: "8px 6px", textAlign: "center", fontSize: "0.65rem", color: "var(--slate-400)" }}>
+                                {seg.emotionalZone === "controlled" ? "🎯 Control" :
+                                 seg.emotionalZone === "dissociative" ? "🎧 Flow" : "🔥 Push"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {!personalModel && (
+                  <div style={{ textAlign: "center", padding: "20px", color: "var(--slate-400)", fontSize: "0.85rem" }}>
+                    Connect your training data to unlock personalized pacing, cadence targets, and BPM-matched playlists based on your running physiology.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* GPX Import */}
           <div className="section gpx-import-container">
