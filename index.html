@@ -3520,7 +3520,7 @@
               </div>
             ) : (
               <button onClick={() => {
-                setMessage({ type: "info", text: "Garmin Connect requires server-side OAuth. For now, import your runs via file export from connect.garmin.com." });
+                document.getElementById("garmin-file-input").click();
               }} style={{
                 display: "flex", alignItems: "center", gap: "6px",
                 padding: "6px 12px", borderRadius: "6px",
@@ -3533,6 +3533,22 @@
               >
                 <span>⌚</span> Garmin
               </button>
+              <input
+                id="garmin-file-input"
+                type="file"
+                accept=".tcx,.fit"
+                multiple
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const files = Array.from(e.target.files);
+                  if (files.length > 0) {
+                    handleTCXFiles(files);
+                    setImportSources(prev => [...new Set([...prev, "garmin"])]);
+                    setGarminConnected(true);
+                  }
+                  e.target.value = "";
+                }}
+              />
             )}
 
             <div style={{ flex: 1 }} />
