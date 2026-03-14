@@ -1,0 +1,1089 @@
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+
+// ─── Spotify Configuration ──────────────────────────────────────────
+// CHANGE THIS to your Spotify App Client ID from https://developer.spotify.com/dashboard
+const SPOTIFY_CLIENT_ID = "5d10f2576ab846f08fab95b686a4d0da";
+const SPOTIFY_REDIRECT_URI = "https://benjaminhaycraft.github.io/pacesync/";
+const SPOTIFY_SCOPES = "playlist-modify-public playlist-modify-private user-read-private";
+
+// ─── Spotify Auth (PKCE) ────────────────────────────────────────────
+function generateRandomString(length) {
+  const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const values = crypto.getRandomValues(new Uint8Array(length));
+  return values.reduce((acc, x) => acc + possible[x % possible.length], "");
+}
+
+async function sha256(plain) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(plain);
+  return window.crypto.subtle.digest("SHA-256", data);
+}
+
+function base64encode(input) {
+  return btoa(String.fromCharCode(...new Uint8Array(input)))
+    .replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+
+async function startSpotifyAuth() {
+  const codeVerifier = generateRandomString(64);
+  const hashed = await sha256(codeVerifier);
+  const codeChallenge = base64encode(hashed);
+
+  // Store verifier for callback
+  window._spotifyCodeVerifier = codeVerifier;
+
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: SPOTIFY_CLIENT_ID,
+    scope: SPOTIFY_SCOPES,
+    code_challenge_method: "S256",
+    code_challenge: codeChallenge,
+    redirect_uri: SPOTIFY_REDIRECT_URI,
+  });
+
+  // Open in popup
+  const w = 450, h = 700;
+  const left = window.screenX + (window.outerWidth - w) / 2;
+  const top = window.screenY + (window.outerHeight - h) / 2;
+  window.open(
+    `https://accounts.spotify.com/authorize?${params.toString()}`,
+    "spotify-auth",
+    `width=${w},height=${h},left=${left},top=${top}`
+  );
+}
+
+async function exchangeCodeForToken(code) {
+  const codeVerifier = window._spotifyCodeVerifier;
+  if (!codeVerifier) throw new Error("No code verifier found");
+
+  const resp = await fetch("https://accounts.spotify.com/api/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: SPOTIFY_CLIENT_ID,
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: SPOTIFY_REDIRECT_URI,
+      code_verifier: codeVerifier,
+    }),
+  });
+
+  if (!resp.ok) throw new Error("Token exchange failed");
+  return resp.json();
+}
+
+async function refreshSpotifyToken(refreshToken) {
+  const resp = await fetch("https://accounts.spotify.com/api/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: SPOTIFY_CLIENT_ID,
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+    }),
+  });
+  if (!resp.ok) throw new Error("Token refresh failed");
+  return resp.json();
+}
+
+// ─── Spotify API Helpers ────────────────────────────────────────────
+async function spotifyFetch(url, token, options = {}) {
+  const resp = await fetch(url, {
+    ...options,
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...options.headers },
+  });
+  if (resp.status === 401) throw new Error("TOKEN_EXPIRED");
+  if (!resp.ok) throw new Error(`Spotify API error: ${resp.status}`);
+  return resp.json();
+}
+
+async function getSpotifyProfile(token) {
+  return spotifyFetch("https://api.spotify.com/v1/me", token);
+}
+
+// Search for tracks by BPM range using Spotify recommendations + audio features
+async function searchTracksByBpm(token, targetBpm, limit = 5, genre = null) {
+  // Use recommendations endpoint with target_tempo
+  const params = new URLSearchParams({
+    limit: String(Math.min(limit * 2, 50)), // fetch extra to filter
+    target_tempo: String(targetBpm),
+    min_tempo: String(targetBpm - 10),
+    max_tempo: String(targetBpm + 10),
+    min_energy: "0.5",
+  });
+
+  // Spotify requires at least one seed
+  // Use genre seeds that work well for running
+  const runningGenres = ["pop", "electronic", "hip-hop", "rock", "indie-pop"];
+  const seedGenre = genre && genre !== "All"
+    ? genre.toLowerCase().replace(" ", "-")
+    : runningGenres[Math.floor(Math.random() * runningGenres.length)];
+  params.set("seed_genres", seedGenre);
+
+  const data = await spotifyFetch(
+    `https://api.spotify.com/v1/recommendations?${params.toString()}`,
+    token
+  );
+
+  return (data.tracks || []).map(t => ({
+    id: t.id,
+    title: t.name,
+    artist: t.artists.map(a => a.name).join(", "),
+    bpm: targetBpm, // Will be refined with audio features
+    duration: Math.round(t.duration_ms / 1000),
+    uri: t.uri,
+    albumArt: t.album.images?.[2]?.url || t.album.images?.[0]?.url || null,
+  }));
+}
+
+// Get actual BPM from audio features
+async function getAudioFeatures(token, trackIds) {
+  if (trackIds.length === 0) return [];
+  const chunks = [];
+  for (let i = 0; i < trackIds.length; i += 100) {
+    chunks.push(trackIds.slice(i, i + 100));
+  }
+  const allFeatures = [];
+  for (const chunk of chunks) {
+    const data = await spotifyFetch(
+      `https://api.spotify.com/v1/audio-features?ids=${chunk.join(",")}`,
+      token
+    );
+    allFeatures.push(...(data.audio_features || []));
+  }
+  return allFeatures;
+}
+
+async function createSpotifyPlaylist(token, userId, name, description, trackUris) {
+  // Create playlist
+  const playlist = await spotifyFetch(
+    `https://api.spotify.com/v1/users/${userId}/playlists`,
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        name,
+        description,
+        public: false,
+      }),
+    }
+  );
+
+  // Add tracks (max 100 per request)
+  for (let i = 0; i < trackUris.length; i += 100) {
+    const chunk = trackUris.slice(i, i + 100);
+    await spotifyFetch(
+      `https://api.spotify.com/v1/playlists/${playlist.id}/tracks`,
+      token,
+      {
+        method: "POST",
+        body: JSON.stringify({ uris: chunk }),
+      }
+    );
+  }
+
+  return playlist;
+}
+
+// ─── Mock Track Database (fallback when not connected) ──────────────
+const MOCK_TRACKS = [
+  { id: 1, title: "Morning Light", artist: "Chill Waves", bpm: 100, duration: 210, genre: "Indie", uri: "spotify:track:mock001" },
+  { id: 2, title: "Easy Breeze", artist: "Sunset Collective", bpm: 105, duration: 195, genre: "Pop", uri: "spotify:track:mock002" },
+  { id: 3, title: "Slow Bloom", artist: "Garden State", bpm: 108, duration: 240, genre: "Indie", uri: "spotify:track:mock003" },
+  { id: 4, title: "Drift Away", artist: "Ocean Eyes", bpm: 110, duration: 225, genre: "Chill", uri: "spotify:track:mock004" },
+  { id: 5, title: "Gentle Steps", artist: "Morning Run", bpm: 112, duration: 200, genre: "Electronic", uri: "spotify:track:mock005" },
+  { id: 6, title: "Steady Pace", artist: "Rhythm Lab", bpm: 118, duration: 210, genre: "Pop", uri: "spotify:track:mock006" },
+  { id: 7, title: "Keep Moving", artist: "Motion", bpm: 120, duration: 230, genre: "Electronic", uri: "spotify:track:mock007" },
+  { id: 8, title: "City Jogger", artist: "Urban Beats", bpm: 122, duration: 195, genre: "Hip-Hop", uri: "spotify:track:mock008" },
+  { id: 9, title: "Momentum", artist: "Drive", bpm: 125, duration: 215, genre: "Rock", uri: "spotify:track:mock009" },
+  { id: 10, title: "On Track", artist: "Pulse", bpm: 128, duration: 200, genre: "Electronic", uri: "spotify:track:mock010" },
+  { id: 11, title: "Cruise Control", artist: "Smooth Ops", bpm: 130, duration: 220, genre: "Pop", uri: "spotify:track:mock011" },
+  { id: 12, title: "Push It", artist: "Adrenaline", bpm: 135, duration: 195, genre: "Electronic", uri: "spotify:track:mock012" },
+  { id: 13, title: "Faster Now", artist: "Sprint", bpm: 138, duration: 210, genre: "Pop", uri: "spotify:track:mock013" },
+  { id: 14, title: "Full Stride", artist: "Endorphin", bpm: 140, duration: 200, genre: "Rock", uri: "spotify:track:mock014" },
+  { id: 15, title: "No Limits", artist: "Peak Performance", bpm: 142, duration: 185, genre: "Electronic", uri: "spotify:track:mock015" },
+  { id: 16, title: "Race Day", artist: "Finish Line", bpm: 145, duration: 205, genre: "Hip-Hop", uri: "spotify:track:mock016" },
+  { id: 17, title: "Lightning", artist: "Thunder Road", bpm: 148, duration: 190, genre: "Rock", uri: "spotify:track:mock017" },
+  { id: 18, title: "Sprint Mode", artist: "Blaze", bpm: 155, duration: 180, genre: "Electronic", uri: "spotify:track:mock018" },
+  { id: 19, title: "Maximum Output", artist: "Overdrive", bpm: 160, duration: 175, genre: "Rock", uri: "spotify:track:mock019" },
+  { id: 20, title: "Explosive", artist: "Nitro", bpm: 165, duration: 170, genre: "Electronic", uri: "spotify:track:mock020" },
+  { id: 21, title: "Beast Mode", artist: "Fury", bpm: 170, duration: 185, genre: "Hip-Hop", uri: "spotify:track:mock021" },
+  { id: 22, title: "Turbo", artist: "Velocity", bpm: 175, duration: 165, genre: "Electronic", uri: "spotify:track:mock022" },
+  { id: 23, title: "Afterburner", artist: "Jet", bpm: 180, duration: 160, genre: "Rock", uri: "spotify:track:mock023" },
+  { id: 24, title: "Dawn Patrol", artist: "Early Bird", bpm: 102, duration: 235, genre: "Chill", uri: "spotify:track:mock024" },
+  { id: 25, title: "Heartbeat", artist: "Cardio Club", bpm: 126, duration: 205, genre: "Pop", uri: "spotify:track:mock025" },
+  { id: 26, title: "Road Runner", artist: "Desert Heat", bpm: 132, duration: 215, genre: "Rock", uri: "spotify:track:mock026" },
+  { id: 27, title: "The Climb", artist: "Summit", bpm: 115, duration: 245, genre: "Indie", uri: "spotify:track:mock027" },
+  { id: 28, title: "Downhill Flow", artist: "Gravity", bpm: 150, duration: 195, genre: "Electronic", uri: "spotify:track:mock028" },
+  { id: 29, title: "Trail Blazer", artist: "Wild Path", bpm: 133, duration: 210, genre: "Rock", uri: "spotify:track:mock029" },
+  { id: 30, title: "Recovery", artist: "Cool Down", bpm: 98, duration: 260, genre: "Chill", uri: "spotify:track:mock030" },
+  { id: 31, title: "Alpine Dawn", artist: "Mont Blanc", bpm: 104, duration: 220, genre: "Chill", uri: "spotify:track:mock031" },
+  { id: 32, title: "Sentier Sauvage", artist: "Les Alpes", bpm: 116, duration: 215, genre: "Electronic", uri: "spotify:track:mock032" },
+  { id: 33, title: "Col du Galibier", artist: "Altitude", bpm: 136, duration: 200, genre: "Rock", uri: "spotify:track:mock033" },
+  { id: 34, title: "Ravitaillement", artist: "Second Wind", bpm: 110, duration: 230, genre: "Indie", uri: "spotify:track:mock034" },
+  { id: 35, title: "Crête Runner", artist: "Ridge Line", bpm: 144, duration: 185, genre: "Electronic", uri: "spotify:track:mock035" },
+  { id: 36, title: "Descente Libre", artist: "Gravity Rush", bpm: 152, duration: 178, genre: "Rock", uri: "spotify:track:mock036" },
+  { id: 37, title: "Sous-Bois", artist: "Forest Floor", bpm: 121, duration: 225, genre: "Chill", uri: "spotify:track:mock037" },
+  { id: 38, title: "Refuge", artist: "Mountain Hut", bpm: 96, duration: 250, genre: "Chill", uri: "spotify:track:mock038" },
+  { id: 39, title: "Passage Technique", artist: "Single Track", bpm: 140, duration: 192, genre: "Hip-Hop", uri: "spotify:track:mock039" },
+  { id: 40, title: "Ligne d'Arrivée", artist: "Finish Strong", bpm: 158, duration: 170, genre: "Electronic", uri: "spotify:track:mock040" },
+];
+
+// ─── French Trail Run Elevation Profiles ────────────────────────────
+const FRENCH_TRAILS = [
+  {
+    id: "ecotrail-20k", name: "EcoTrail de Paris 20K", location: "Saint-Cloud → Meudon",
+    distance: 20, elevGain: 500, region: "Île-de-France", difficulty: "Easy",
+    profile: [92, 105, 135, 168, 190, 172, 145, 120, 98, 115, 148, 180, 195, 178, 155, 130, 108, 125, 160, 188, 175, 150, 128, 110, 95],
+  },
+  {
+    id: "utmb-short-occ", name: "OCC (UTMB Series)", location: "Orsières → Chamonix",
+    distance: 56, elevGain: 3500, region: "Haute-Savoie", difficulty: "Hard",
+    profile: [880, 950, 1080, 1250, 1450, 1680, 1900, 2100, 2350, 2520, 2370, 2100, 1850, 1600, 1380, 1200, 1080, 1250, 1480, 1700, 1950, 2180, 2050, 1750, 1450, 1200, 1050],
+  },
+  {
+    id: "marathon-mont-blanc-42k", name: "Marathon du Mont-Blanc 42K", location: "Chamonix",
+    distance: 42, elevGain: 2540, region: "Haute-Savoie", difficulty: "Hard",
+    profile: [1035, 1100, 1200, 1350, 1520, 1700, 1880, 2050, 2185, 2100, 1900, 1650, 1400, 1200, 1100, 1250, 1450, 1680, 1850, 2030, 1900, 1700, 1500, 1300, 1100, 1035],
+  },
+  {
+    id: "templiers-80k", name: "Grand Trail des Templiers", location: "Millau, Aveyron",
+    distance: 80, elevGain: 3430, region: "Occitanie", difficulty: "Hard",
+    profile: [380, 520, 680, 820, 950, 780, 580, 420, 350, 500, 700, 880, 780, 600, 450, 380, 550, 750, 920, 850, 680, 500, 380, 520, 720, 900, 800, 620, 450, 380],
+  },
+  {
+    id: "saintelyon-80k", name: "SaintéLyon 80K", location: "Saint-Étienne → Lyon",
+    distance: 80, elevGain: 1950, region: "Auvergne-Rhône-Alpes", difficulty: "Medium",
+    profile: [520, 580, 650, 720, 780, 750, 690, 630, 580, 620, 700, 760, 720, 660, 600, 540, 500, 460, 420, 480, 530, 490, 440, 380, 330, 280, 230, 200, 180],
+  },
+  {
+    id: "ecotrail-80k", name: "EcoTrail de Paris 80K", location: "Versailles → Tour Eiffel",
+    distance: 80, elevGain: 1400, region: "Île-de-France", difficulty: "Medium",
+    profile: [140, 160, 185, 170, 150, 175, 200, 225, 210, 190, 170, 195, 220, 205, 180, 160, 145, 170, 195, 180, 160, 140, 125, 110, 100, 85, 70, 55, 40],
+  },
+  {
+    id: "maxi-race-42k", name: "Maxi-Race du Lac d'Annecy 42K", location: "Annecy, Haute-Savoie",
+    distance: 42, elevGain: 2800, region: "Auvergne-Rhône-Alpes", difficulty: "Hard",
+    profile: [450, 550, 700, 900, 1100, 1300, 1500, 1650, 1500, 1300, 1100, 900, 700, 550, 450, 600, 850, 1100, 1350, 1550, 1400, 1150, 900, 650, 450],
+  },
+  {
+    id: "trail-sancy-33k", name: "Trail du Sancy 33K", location: "Mont-Dore, Puy-de-Dôme",
+    distance: 33, elevGain: 2000, region: "Auvergne", difficulty: "Medium",
+    profile: [1050, 1150, 1300, 1450, 1600, 1750, 1886, 1800, 1650, 1500, 1350, 1200, 1100, 1200, 1400, 1600, 1750, 1650, 1450, 1250, 1100, 1050],
+  },
+  {
+    id: "ut4m-40k", name: "UT4M 40K", location: "Grenoble, Isère",
+    distance: 40, elevGain: 2600, region: "Auvergne-Rhône-Alpes", difficulty: "Hard",
+    profile: [220, 350, 550, 800, 1050, 1300, 1550, 1750, 1600, 1350, 1100, 850, 600, 400, 300, 500, 750, 1000, 1250, 1500, 1350, 1100, 800, 500, 280, 220],
+  },
+  {
+    id: "trail-blanc-megeve-22k", name: "Trail du Pays du Mont-Blanc 22K", location: "Megève, Haute-Savoie",
+    distance: 22, elevGain: 1200, region: "Haute-Savoie", difficulty: "Medium",
+    profile: [1100, 1200, 1350, 1500, 1680, 1820, 1950, 1850, 1700, 1550, 1400, 1250, 1150, 1300, 1500, 1700, 1600, 1400, 1200, 1100],
+  },
+  {
+    id: "ultra-mercantour-60k", name: "Ultra-Trail Côte d'Azur 60K", location: "Mercantour, Alpes-Maritimes",
+    distance: 60, elevGain: 3800, region: "Provence-Alpes-Côte d'Azur", difficulty: "Hard",
+    profile: [600, 800, 1050, 1350, 1650, 1950, 2200, 2100, 1800, 1500, 1200, 900, 700, 850, 1150, 1500, 1850, 2150, 2050, 1700, 1350, 1000, 750, 600],
+  },
+  {
+    id: "trail-cote-granit-rose-30k", name: "Trail de la Côte de Granit Rose 30K", location: "Perros-Guirec, Côtes-d'Armor",
+    distance: 30, elevGain: 800, region: "Bretagne", difficulty: "Easy",
+    profile: [5, 25, 50, 75, 95, 70, 40, 15, 5, 30, 65, 90, 105, 85, 55, 25, 10, 40, 70, 100, 80, 50, 20, 5],
+  },
+];
+
+// ─── Utilities ──────────────────────────────────────────────────────
+function formatTime(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function formatPace(minPerKm) {
+  const m = Math.floor(minPerKm);
+  const s = Math.round((minPerKm - m) * 60);
+  return `${m}'${s.toString().padStart(2, "0")}"`;
+}
+
+function bpmToColor(bpm) {
+  const t = Math.max(0, Math.min(1, (bpm - 95) / 85));
+  const h = (1 - t) * 200;
+  return `hsl(${h}, 70%, 55%)`;
+}
+
+function difficultyColor(d) {
+  if (d === "Easy") return { bg: "#dcfce7", text: "#166534" };
+  if (d === "Medium") return { bg: "#fef3c7", text: "#92400e" };
+  return { bg: "#fee2e2", text: "#991b1b" };
+}
+
+function profileToGradients(profile, distanceKm) {
+  const segLen = distanceKm / (profile.length - 1);
+  const grads = [];
+  for (let i = 0; i < profile.length; i++) {
+    if (i === 0) {
+      grads.push((profile[1] - profile[0]) / (segLen * 1000));
+    } else if (i === profile.length - 1) {
+      grads.push((profile[i] - profile[i - 1]) / (segLen * 1000));
+    } else {
+      grads.push((profile[i + 1] - profile[i - 1]) / (2 * segLen * 1000));
+    }
+  }
+  return grads;
+}
+
+// Gradient-based BPM: uphill → slower pace, lower BPM; downhill → faster pace, higher BPM
+function gradientToBpm(gradient, baseBpm) {
+  const uphillDrop = Math.max(0, gradient) * 250;
+  const downhillBoost = Math.max(0, -gradient) * 200;
+  const bpm = baseBpm - uphillDrop + downhillBoost;
+  return Math.round(Math.max(95, Math.min(180, bpm)));
+}
+
+function paceToBaseBpm(minPerKm) {
+  const bpm = 220 - minPerKm * 15;
+  return Math.max(105, Math.min(175, bpm));
+}
+
+// ─── Playlist generation (offline mock) ─────────────────────────────
+function generatePlaylistOffline(phases, totalMinutes, genreFilter) {
+  const totalSeconds = totalMinutes * 60;
+  const playlist = [];
+  let elapsed = 0;
+  for (const phase of phases) {
+    const phaseEnd = elapsed + phase.pct * totalSeconds;
+    const [lo, hi] = phase.bpmRange;
+    let candidates = MOCK_TRACKS.filter(t => t.bpm >= lo - 5 && t.bpm <= hi + 5 && (genreFilter === "All" || t.genre === genreFilter));
+    if (candidates.length === 0) candidates = MOCK_TRACKS.filter(t => t.bpm >= lo - 10 && t.bpm <= hi + 10);
+    if (candidates.length === 0) candidates = MOCK_TRACKS.filter(t => t.bpm >= lo - 20 && t.bpm <= hi + 20);
+    const mid = (lo + hi) / 2;
+    candidates.sort((a, b) => Math.abs(a.bpm - mid) - Math.abs(b.bpm - mid));
+    let idx = 0;
+    while (elapsed < phaseEnd && idx < candidates.length * 3) {
+      const track = candidates[idx % candidates.length];
+      if (!playlist.find(p => p.id === track.id)) {
+        playlist.push({ ...track, startAt: elapsed, phase: phase.name, targetBpm: mid });
+        elapsed += track.duration;
+      }
+      idx++;
+      if (idx >= candidates.length * 3) break;
+    }
+  }
+  return playlist;
+}
+
+// ─── Playlist generation (Spotify live) ─────────────────────────────
+async function generatePlaylistSpotify(phases, totalMinutes, genreFilter, token) {
+  const totalSeconds = totalMinutes * 60;
+  const playlist = [];
+  let elapsed = 0;
+  const usedIds = new Set();
+
+  for (const phase of phases) {
+    const phaseEnd = elapsed + phase.pct * totalSeconds;
+    const [lo, hi] = phase.bpmRange;
+    const mid = Math.round((lo + hi) / 2);
+
+    // Search Spotify for tracks near this BPM
+    let candidates;
+    try {
+      candidates = await searchTracksByBpm(token, mid, 8, genreFilter);
+      // Get real BPMs
+      const ids = candidates.map(c => c.id);
+      const features = await getAudioFeatures(token, ids);
+      candidates = candidates.map((c, i) => ({
+        ...c,
+        bpm: features[i] ? Math.round(features[i].tempo) : mid,
+      }));
+    } catch (e) {
+      // Fallback to mock if API fails
+      candidates = MOCK_TRACKS.filter(t => t.bpm >= lo - 10 && t.bpm <= hi + 10);
+    }
+
+    candidates.sort((a, b) => Math.abs(a.bpm - mid) - Math.abs(b.bpm - mid));
+
+    let idx = 0;
+    while (elapsed < phaseEnd && idx < candidates.length) {
+      const track = candidates[idx];
+      if (!usedIds.has(track.id)) {
+        usedIds.add(track.id);
+        playlist.push({ ...track, startAt: elapsed, phase: phase.name, targetBpm: mid });
+        elapsed += track.duration;
+      }
+      idx++;
+    }
+  }
+  return playlist;
+}
+
+function buildPhases(trail, baseBpm) {
+  const grads = profileToGradients(trail.profile, trail.distance);
+  const segmentPct = 1 / grads.length;
+  return grads.map(grad => {
+    const bpm = gradientToBpm(grad, baseBpm);
+    const label = grad > 0.03 ? "Uphill" : grad < -0.03 ? "Downhill" : "Flat";
+    return { name: label, pct: segmentPct, bpmRange: [bpm - 8, bpm + 8] };
+  });
+}
+
+// ─── Components ─────────────────────────────────────────────────────
+
+function SpotifyConnectBar({ token, profile, onConnect, onDisconnect }) {
+  if (token && profile) {
+    return (
+      <div style={{
+        display: "flex", alignItems: "center", gap: 12, padding: "10px 16px",
+        background: "#f0fdf4", borderRadius: 12, border: "1px solid #bbf7d0", marginBottom: 24
+      }}>
+        <div style={{ width: 28, height: 28, borderRadius: 14, background: "#1DB954", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ color: "#fff", fontSize: 14 }}>&#10003;</span>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#166534" }}>Connected to Spotify</div>
+          <div style={{ fontSize: 12, color: "#15803d" }}>{profile.display_name} &middot; {profile.product === "premium" ? "Premium" : "Free"}</div>
+        </div>
+        <button onClick={onDisconnect} style={{
+          padding: "5px 12px", background: "none", border: "1px solid #bbf7d0", borderRadius: 8,
+          fontSize: 12, color: "#15803d", cursor: "pointer"
+        }}>Disconnect</button>
+      </div>
+    );
+  }
+
+  const isConfigured = SPOTIFY_CLIENT_ID !== "YOUR_CLIENT_ID_HERE";
+
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 12, padding: "14px 16px",
+      background: isConfigured ? "#fff" : "#fefce8", borderRadius: 12,
+      border: isConfigured ? "1px solid #e5e7eb" : "1px solid #fde68a", marginBottom: 24
+    }}>
+      <div style={{ width: 28, height: 28, borderRadius: 14, background: "#1DB954", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ color: "#fff", fontSize: 16, fontWeight: 700 }}>S</span>
+      </div>
+      <div style={{ flex: 1 }}>
+        {isConfigured ? (
+          <>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#1f2937" }}>Connect your Spotify account</div>
+            <div style={{ fontSize: 12, color: "#9ca3af" }}>Search real tracks by BPM and create playlists directly</div>
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#92400e" }}>Spotify Client ID not set</div>
+            <div style={{ fontSize: 12, color: "#a16207" }}>
+              Set <code style={{ background: "#fef9c3", padding: "1px 4px", borderRadius: 3 }}>SPOTIFY_CLIENT_ID</code> at top of file.
+              Get one at <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener" style={{ color: "#1DB954" }}>developer.spotify.com</a>
+            </div>
+          </>
+        )}
+      </div>
+      <button onClick={onConnect} disabled={!isConfigured} style={{
+        padding: "8px 20px", background: isConfigured ? "#1DB954" : "#d1d5db", color: "#fff", border: "none",
+        borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: isConfigured ? "pointer" : "not-allowed",
+        opacity: isConfigured ? 1 : 0.6
+      }}>
+        Connect
+      </button>
+    </div>
+  );
+}
+
+function ElevationChart({ trail, width = 620, height = 200 }) {
+  const profile = trail.profile;
+  const min = Math.min(...profile);
+  const max = Math.max(...profile);
+  const range = max - min || 1;
+  const padTop = 20, padBot = 30, padLeft = 45, padRight = 15;
+  const cw = width - padLeft - padRight;
+  const ch = height - padTop - padBot;
+  const grads = profileToGradients(profile, trail.distance);
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", maxWidth: width, height: "auto" }}>
+      {[0, 0.25, 0.5, 0.75, 1].map(t => {
+        const y = padTop + ch * (1 - t);
+        const alt = Math.round(min + t * range);
+        return (
+          <g key={t}>
+            <line x1={padLeft} y1={y} x2={padLeft + cw} y2={y} stroke="#f3f4f6" strokeWidth={1} />
+            <text x={padLeft - 6} y={y + 3} fontSize={9} fill="#9ca3af" textAnchor="end">{alt}m</text>
+          </g>
+        );
+      })}
+      {[0, 0.25, 0.5, 0.75, 1].map(t => {
+        const x = padLeft + t * cw;
+        return <text key={t} x={x} y={height - 8} fontSize={9} fill="#9ca3af" textAnchor="middle">{Math.round(t * trail.distance)}km</text>;
+      })}
+      <defs>
+        <linearGradient id="elevFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.25} />
+          <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
+        </linearGradient>
+      </defs>
+      <path
+        d={`M ${padLeft} ${padTop + ch} ` +
+          profile.map((alt, i) => {
+            const x = padLeft + (i / (profile.length - 1)) * cw;
+            const y = padTop + ch * (1 - (alt - min) / range);
+            return `L ${x} ${y}`;
+          }).join(" ") +
+          ` L ${padLeft + cw} ${padTop + ch} Z`}
+        fill="url(#elevFill)"
+      />
+      {profile.slice(0, -1).map((alt, i) => {
+        const x1 = padLeft + (i / (profile.length - 1)) * cw;
+        const y1 = padTop + ch * (1 - (alt - min) / range);
+        const x2 = padLeft + ((i + 1) / (profile.length - 1)) * cw;
+        const y2 = padTop + ch * (1 - (profile[i + 1] - min) / range);
+        const grad = grads[i];
+        const color = grad > 0.03 ? "#ef4444" : grad < -0.03 ? "#22c55e" : "#3b82f6";
+        return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={color} strokeWidth={2.5} strokeLinecap="round" />;
+      })}
+      {grads.map((g, i) => {
+        const x = padLeft + (i / grads.length) * cw;
+        const bw = cw / grads.length;
+        const bpm = gradientToBpm(g, 130);
+        return <rect key={i} x={x} y={padTop + ch - 6} width={bw + 1} height={6} fill={bpmToColor(bpm)} opacity={0.7} />;
+      })}
+      {[{ color: "#ef4444", label: "Uphill (slower BPM)" }, { color: "#3b82f6", label: "Flat" }, { color: "#22c55e", label: "Downhill (faster BPM)" }].map((item, i) => (
+        <g key={i} transform={`translate(${padLeft + i * 100}, ${height - 22})`}>
+          <rect width={10} height={3} fill={item.color} rx={1} y={1} />
+          <text x={14} y={5} fontSize={9} fill="#9ca3af">{item.label}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function ElevationCanvas({ points, onChange, width = 620, height = 180 }) {
+  const canvasRef = useRef(null);
+  const isDrawing = useRef(false);
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = "#e5e7eb"; ctx.lineWidth = 1;
+    for (let y = 0; y <= 4; y++) { ctx.beginPath(); ctx.moveTo(0, (y * h) / 4); ctx.lineTo(w, (y * h) / 4); ctx.stroke(); }
+    const min = Math.min(...points), max = Math.max(...points), range = max - min || 1;
+    ctx.beginPath(); ctx.moveTo(0, h);
+    points.forEach((p, i) => { ctx.lineTo((i / (points.length - 1)) * w, h - ((p - min) / range) * h * 0.85 - h * 0.05); });
+    ctx.lineTo(w, h); ctx.closePath();
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, "rgba(59,130,246,0.25)"); grad.addColorStop(1, "rgba(59,130,246,0.02)");
+    ctx.fillStyle = grad; ctx.fill();
+    ctx.beginPath();
+    points.forEach((p, i) => { const x = (i / (points.length - 1)) * w, y = h - ((p - min) / range) * h * 0.85 - h * 0.05; i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+    ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 2.5; ctx.stroke();
+    points.forEach((p, i) => { const x = (i / (points.length - 1)) * w, y = h - ((p - min) / range) * h * 0.85 - h * 0.05; ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.fillStyle = "#3b82f6"; ctx.fill(); });
+  }, [points]);
+  useEffect(() => { draw(); }, [draw]);
+  const handleMouse = (e) => {
+    if (!isDrawing.current && e.type !== "mousedown") return;
+    if (e.type === "mousedown") isDrawing.current = true;
+    if (e.type === "mouseup" || e.type === "mouseleave") { isDrawing.current = false; return; }
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    const idx = Math.round((x / rect.width) * (points.length - 1));
+    const min = Math.min(...points), max = Math.max(...points), range = max - min || 500;
+    const alt = Math.round(min + (1 - y / rect.height) * range);
+    if (idx >= 0 && idx < points.length) { const np = [...points]; np[idx] = Math.max(0, alt); onChange(np); }
+  };
+  return (
+    <canvas ref={canvasRef} width={width} height={height}
+      style={{ border: "1px solid #e5e7eb", borderRadius: 12, cursor: "crosshair", width: "100%", maxWidth: width, background: "#fafbfc" }}
+      onMouseDown={handleMouse} onMouseMove={handleMouse} onMouseUp={handleMouse} onMouseLeave={handleMouse} />
+  );
+}
+
+function TrailCard({ trail, selected, onClick }) {
+  const dc = difficultyColor(trail.difficulty);
+  const min = Math.min(...trail.profile), max = Math.max(...trail.profile);
+  return (
+    <button onClick={onClick} style={{
+      padding: 14, background: selected ? "#eff6ff" : "#fff", border: selected ? "2px solid #3b82f6" : "1px solid #e5e7eb",
+      borderRadius: 12, cursor: "pointer", textAlign: "left", width: "100%", transition: "all 0.15s"
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "#1f2937" }}>{trail.name}</div>
+          <div style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>{trail.location}</div>
+        </div>
+        <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, background: dc.bg, color: dc.text, fontWeight: 600 }}>{trail.difficulty}</span>
+      </div>
+      <div style={{ display: "flex", gap: 16, marginTop: 8, fontSize: 12, color: "#6b7280" }}>
+        <span>{trail.distance} km</span><span>D+ {trail.elevGain}m</span><span>{min}m – {max}m</span>
+      </div>
+      <svg viewBox="0 0 200 30" style={{ width: "100%", height: 24, marginTop: 6 }}>
+        <path d={`M 0 30 ` + trail.profile.map((alt, i) => `L ${(i / (trail.profile.length - 1)) * 200} ${28 - ((alt - min) / ((max - min) || 1)) * 24}`).join(" ") + ` L 200 30 Z`}
+          fill={selected ? "rgba(59,130,246,0.15)" : "rgba(59,130,246,0.08)"} stroke={selected ? "#3b82f6" : "#93c5fd"} strokeWidth={1.5} />
+      </svg>
+    </button>
+  );
+}
+
+function TrackRow({ track, index }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "32px 1fr 70px 60px 80px", gap: 12, alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f3f4f6" }}>
+      <span style={{ fontSize: 13, color: "#9ca3af", textAlign: "center" }}>{index + 1}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        {track.albumArt && <img src={track.albumArt} alt="" style={{ width: 32, height: 32, borderRadius: 4 }} />}
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 500, color: "#1f2937" }}>{track.title}</div>
+          <div style={{ fontSize: 12, color: "#9ca3af" }}>{track.artist}</div>
+        </div>
+      </div>
+      <div style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", background: bpmToColor(track.bpm) + "22", borderRadius: 12, width: "fit-content" }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: bpmToColor(track.bpm) }}>{track.bpm}</span>
+        <span style={{ fontSize: 10, color: "#9ca3af" }}>BPM</span>
+      </div>
+      <span style={{ fontSize: 12, color: "#9ca3af" }}>{formatTime(track.duration)}</span>
+      <span style={{
+        fontSize: 11, padding: "2px 8px", borderRadius: 8, textAlign: "center",
+        background: track.phase === "Uphill" ? "#fee2e2" : track.phase === "Downhill" ? "#dcfce7" : "#f3f4f6",
+        color: track.phase === "Uphill" ? "#991b1b" : track.phase === "Downhill" ? "#166534" : "#6b7280"
+      }}>{track.phase}</span>
+    </div>
+  );
+}
+
+function BpmTimeline({ playlist, totalMinutes }) {
+  const w = 620, h = 100, totalSec = totalMinutes * 60;
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", maxWidth: w, height: "auto" }}>
+      {[100, 120, 140, 160, 180].map(bpm => {
+        const y = h - ((bpm - 90) / 100) * h;
+        return (<g key={bpm}><line x1={0} y1={y} x2={w} y2={y} stroke="#f3f4f6" strokeWidth={1} /><text x={4} y={y - 3} fontSize={9} fill="#d1d5db">{bpm}</text></g>);
+      })}
+      {playlist.length > 1 && (
+        <polyline fill="none" stroke="#3b82f6" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"
+          points={playlist.map(t => `${(t.startAt / totalSec) * w},${h - ((t.bpm - 90) / 100) * h}`).join(" ")} />
+      )}
+      {playlist.map((t, i) => {
+        const x = (t.startAt / totalSec) * w, y = h - ((t.bpm - 90) / 100) * h;
+        return <circle key={i} cx={x} cy={y} r={4} fill={bpmToColor(t.bpm)} stroke="#fff" strokeWidth={1.5} />;
+      })}
+    </svg>
+  );
+}
+
+// ─── Main App ───────────────────────────────────────────────────────
+export default function RunPlaylistGenerator() {
+  // Spotify auth state
+  const [spotifyToken, setSpotifyToken] = useState(null);
+  const [spotifyRefreshToken, setSpotifyRefreshToken] = useState(null);
+  const [spotifyProfile, setSpotifyProfile] = useState(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportResult, setExportResult] = useState(null);
+  const [generating, setGenerating] = useState(false);
+
+  // Trail state
+  const [selectedTrail, setSelectedTrail] = useState(FRENCH_TRAILS[0]);
+  const [customProfile, setCustomProfile] = useState(null);
+  const [useCustom, setUseCustom] = useState(false);
+  const [customDistance, setCustomDistance] = useState(20);
+
+  // Target state
+  const [targetMode, setTargetMode] = useState("pace");
+  const [targetPace, setTargetPace] = useState(5.5);
+  const [targetDistanceKm, setTargetDistanceKm] = useState(20);
+  const [targetTimeH, setTargetTimeH] = useState(1);
+  const [targetTimeM, setTargetTimeM] = useState(45);
+  const [targetTimeOnlyH, setTargetTimeOnlyH] = useState(2);
+  const [targetTimeOnlyM, setTargetTimeOnlyM] = useState(0);
+
+  const [genreFilter, setGenreFilter] = useState("All");
+  const [playlist, setPlaylist] = useState([]);
+  const [showExport, setShowExport] = useState(false);
+  const [regionFilter, setRegionFilter] = useState("All");
+
+  const genres = useMemo(() => ["All", ...new Set(MOCK_TRACKS.map(t => t.genre))], []);
+  const regions = useMemo(() => ["All", ...new Set(FRENCH_TRAILS.map(t => t.region))], []);
+  const filteredTrails = regionFilter === "All" ? FRENCH_TRAILS : FRENCH_TRAILS.filter(t => t.region === regionFilter);
+
+  const activeTrail = useCustom
+    ? { ...selectedTrail, profile: customProfile || selectedTrail.profile, distance: customDistance, name: "Custom Profile" }
+    : selectedTrail;
+
+  const computedTotalMinutes = useMemo(() => {
+    if (targetMode === "pace") return Math.round(targetPace * activeTrail.distance);
+    if (targetMode === "distance_time") return targetTimeH * 60 + targetTimeM;
+    return targetTimeOnlyH * 60 + targetTimeOnlyM;
+  }, [targetMode, targetPace, activeTrail.distance, targetTimeH, targetTimeM, targetTimeOnlyH, targetTimeOnlyM]);
+
+  const computedPace = useMemo(() => {
+    if (targetMode === "pace") return targetPace;
+    return computedTotalMinutes / activeTrail.distance;
+  }, [targetMode, targetPace, computedTotalMinutes, activeTrail.distance]);
+
+  const baseBpm = useMemo(() => paceToBaseBpm(computedPace), [computedPace]);
+
+  // Handle OAuth callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    if (code) {
+      // Remove code from URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      exchangeCodeForToken(code).then(data => {
+        setSpotifyToken(data.access_token);
+        if (data.refresh_token) setSpotifyRefreshToken(data.refresh_token);
+        return getSpotifyProfile(data.access_token);
+      }).then(profile => {
+        setSpotifyProfile(profile);
+      }).catch(err => {
+        console.error("Auth failed:", err);
+      });
+    }
+
+    // Listen for popup callback
+    const handleMessage = (event) => {
+      if (event.data?.type === "spotify-callback" && event.data.code) {
+        exchangeCodeForToken(event.data.code).then(data => {
+          setSpotifyToken(data.access_token);
+          if (data.refresh_token) setSpotifyRefreshToken(data.refresh_token);
+          return getSpotifyProfile(data.access_token);
+        }).then(profile => {
+          setSpotifyProfile(profile);
+        }).catch(err => console.error("Auth failed:", err));
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
+  const handleConnect = async () => {
+    await startSpotifyAuth();
+  };
+
+  const handleDisconnect = () => {
+    setSpotifyToken(null);
+    setSpotifyRefreshToken(null);
+    setSpotifyProfile(null);
+    setExportResult(null);
+  };
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    setExportResult(null);
+    try {
+      const phases = buildPhases(activeTrail, baseBpm);
+      let result;
+      if (spotifyToken) {
+        try {
+          result = await generatePlaylistSpotify(phases, computedTotalMinutes, genreFilter, spotifyToken);
+        } catch (e) {
+          if (e.message === "TOKEN_EXPIRED" && spotifyRefreshToken) {
+            const newTokenData = await refreshSpotifyToken(spotifyRefreshToken);
+            setSpotifyToken(newTokenData.access_token);
+            result = await generatePlaylistSpotify(phases, computedTotalMinutes, genreFilter, newTokenData.access_token);
+          } else {
+            result = generatePlaylistOffline(phases, computedTotalMinutes, genreFilter);
+          }
+        }
+      } else {
+        result = generatePlaylistOffline(phases, computedTotalMinutes, genreFilter);
+      }
+      setPlaylist(result);
+      setShowExport(false);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleExportToSpotify = async () => {
+    if (!spotifyToken || !spotifyProfile || playlist.length === 0) return;
+    setExporting(true);
+    try {
+      const uris = playlist.map(t => t.uri).filter(u => !u.includes("mock"));
+      if (uris.length === 0) {
+        setExportResult({ error: "No real Spotify tracks to export. Connect Spotify and regenerate." });
+        return;
+      }
+      const description = `PaceSync playlist for ${activeTrail.name} — ${activeTrail.distance}km, ${formatPace(computedPace)}/km, avg ${Math.round(baseBpm)} BPM`;
+      const created = await createSpotifyPlaylist(
+        spotifyToken,
+        spotifyProfile.id,
+        `PaceSync: ${activeTrail.name}`,
+        description,
+        uris
+      );
+      setExportResult({
+        success: true,
+        url: created.external_urls?.spotify,
+        name: created.name,
+        trackCount: uris.length,
+      });
+    } catch (e) {
+      setExportResult({ error: e.message });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleSelectTrail = (trail) => {
+    setSelectedTrail(trail);
+    setUseCustom(false);
+    setCustomProfile(null);
+    setExportResult(null);
+  };
+
+  const totalDuration = playlist.reduce((s, t) => s + t.duration, 0);
+  const avgBpm = playlist.length ? Math.round(playlist.reduce((s, t) => s + t.bpm, 0) / playlist.length) : 0;
+  const isSpotifyConnected = !!(spotifyToken && spotifyProfile);
+  const hasRealTracks = playlist.some(t => !t.uri.includes("mock"));
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#fafbfc", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+      {/* Header */}
+      <header style={{ background: "#fff", borderBottom: "1px solid #e5e7eb", padding: "20px 0" }}>
+        <div style={{ maxWidth: 780, margin: "0 auto", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #3b82f6, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ color: "#fff", fontSize: 18 }}>&#9835;</span>
+            </div>
+            <div>
+              <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "#1f2937" }}>PaceSync</h1>
+              <p style={{ margin: 0, fontSize: 12, color: "#9ca3af" }}>Trail running playlists matched to French courses</p>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {isSpotifyConnected && <div style={{ width: 8, height: 8, borderRadius: 4, background: "#1DB954" }} />}
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#1DB954" }}>Spotify</span>
+          </div>
+        </div>
+      </header>
+
+      <main style={{ maxWidth: 780, margin: "0 auto", padding: "32px 24px" }}>
+        {/* Spotify Connect */}
+        <SpotifyConnectBar token={spotifyToken} profile={spotifyProfile} onConnect={handleConnect} onDisconnect={handleDisconnect} />
+
+        {/* ── Section 1: Select a Trail ──────────────────────── */}
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "#1f2937" }}>1. Choose a Trail</h2>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <label style={{ fontSize: 12, color: "#9ca3af" }}>Region</label>
+              <select value={regionFilter} onChange={e => setRegionFilter(e.target.value)} style={{ padding: "5px 10px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, background: "#fff" }}>
+                {regions.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, maxHeight: 420, overflowY: "auto", paddingRight: 4 }}>
+            {filteredTrails.map(trail => (
+              <TrailCard key={trail.id} trail={trail} selected={selectedTrail.id === trail.id && !useCustom} onClick={() => handleSelectTrail(trail)} />
+            ))}
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <button onClick={() => { setUseCustom(!useCustom); if (!customProfile) setCustomProfile([...selectedTrail.profile]); }} style={{
+              padding: "8px 16px", background: useCustom ? "#eff6ff" : "#f9fafb",
+              border: useCustom ? "2px solid #3b82f6" : "1px solid #e5e7eb",
+              borderRadius: 10, fontSize: 13, cursor: "pointer", color: useCustom ? "#1d4ed8" : "#6b7280", fontWeight: useCustom ? 600 : 400
+            }}>{useCustom ? "Drawing custom profile" : "Or draw your own profile"}</button>
+          </div>
+          {useCustom && (
+            <div style={{ marginTop: 12, background: "#fff", borderRadius: 12, border: "1px solid #e5e7eb", padding: 16 }}>
+              <p style={{ fontSize: 12, color: "#9ca3af", margin: "0 0 8px 0" }}>Click and drag to reshape. Based on: {selectedTrail.name}</p>
+              <ElevationCanvas points={customProfile || selectedTrail.profile} onChange={setCustomProfile} />
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 10 }}>
+                <label style={{ fontSize: 12, color: "#6b7280" }}>Distance</label>
+                <input type="number" min={1} max={200} value={customDistance} onChange={e => setCustomDistance(+e.target.value)}
+                  style={{ width: 60, padding: "4px 8px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 13 }} />
+                <span style={{ fontSize: 12, color: "#9ca3af" }}>km</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Elevation chart */}
+        {!useCustom && (
+          <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #e5e7eb", padding: "16px 20px", marginBottom: 28 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "#1f2937", marginBottom: 4 }}>{selectedTrail.name}</div>
+            <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 12 }}>{selectedTrail.distance}km &middot; D+{selectedTrail.elevGain}m &middot; {selectedTrail.region}</div>
+            <ElevationChart trail={selectedTrail} />
+          </div>
+        )}
+
+        {/* ── Section 2: Set your target ────────────────────── */}
+        <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #e5e7eb", padding: 20, marginBottom: 28 }}>
+          <h2 style={{ margin: "0 0 14px 0", fontSize: 16, fontWeight: 700, color: "#1f2937" }}>2. Set Your Target</h2>
+          <div style={{ display: "flex", gap: 4, padding: 4, background: "#f3f4f6", borderRadius: 10, marginBottom: 18, width: "fit-content" }}>
+            {[{ key: "pace", label: "Target Pace" }, { key: "distance_time", label: "Distance + Time" }, { key: "time_only", label: "Target Time" }].map(m => (
+              <button key={m.key} onClick={() => setTargetMode(m.key)} style={{
+                padding: "7px 16px", borderRadius: 8, border: "none", cursor: "pointer",
+                background: targetMode === m.key ? "#fff" : "transparent",
+                boxShadow: targetMode === m.key ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                fontWeight: targetMode === m.key ? 600 : 400, fontSize: 13,
+                color: targetMode === m.key ? "#1f2937" : "#9ca3af"
+              }}>{m.label}</button>
+            ))}
+          </div>
+
+          {targetMode === "pace" && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <label style={{ fontSize: 13, color: "#6b7280" }}>Mean pace</label>
+                <input type="range" min={3} max={10} step={0.1} value={targetPace} onChange={e => setTargetPace(+e.target.value)} style={{ flex: 1, minWidth: 150, accentColor: "#3b82f6" }} />
+                <span style={{ fontSize: 18, fontWeight: 700, color: "#1f2937", minWidth: 55 }}>{formatPace(targetPace)}</span>
+                <span style={{ fontSize: 12, color: "#9ca3af" }}>/km</span>
+              </div>
+              <div style={{ display: "flex", gap: 24, marginTop: 12, fontSize: 13, color: "#6b7280" }}>
+                <span>Est. time: <strong style={{ color: "#1f2937" }}>{formatTime(computedTotalMinutes * 60)}</strong></span>
+                <span>Distance: <strong style={{ color: "#1f2937" }}>{activeTrail.distance} km</strong></span>
+                <span>Base BPM: <strong style={{ color: bpmToColor(baseBpm) }}>{Math.round(baseBpm)}</strong></span>
+              </div>
+            </div>
+          )}
+          {targetMode === "distance_time" && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <label style={{ fontSize: 13, color: "#6b7280" }}>Distance</label>
+                <span style={{ fontSize: 16, fontWeight: 600, color: "#1f2937" }}>{activeTrail.distance} km</span>
+                <span style={{ margin: "0 8px", color: "#d1d5db" }}>|</span>
+                <label style={{ fontSize: 13, color: "#6b7280" }}>Target time</label>
+                <input type="number" min={0} max={24} value={targetTimeH} onChange={e => setTargetTimeH(+e.target.value)} style={{ width: 50, padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14, textAlign: "center" }} />
+                <span style={{ fontSize: 13, color: "#9ca3af" }}>h</span>
+                <input type="number" min={0} max={59} value={targetTimeM} onChange={e => setTargetTimeM(+e.target.value)} style={{ width: 50, padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14, textAlign: "center" }} />
+                <span style={{ fontSize: 13, color: "#9ca3af" }}>min</span>
+              </div>
+              <div style={{ display: "flex", gap: 24, marginTop: 12, fontSize: 13, color: "#6b7280" }}>
+                <span>Avg pace: <strong style={{ color: "#1f2937" }}>{formatPace(computedPace)}/km</strong></span>
+                <span>Base BPM: <strong style={{ color: bpmToColor(baseBpm) }}>{Math.round(baseBpm)}</strong></span>
+              </div>
+            </div>
+          )}
+          {targetMode === "time_only" && (
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <label style={{ fontSize: 13, color: "#6b7280" }}>I want to run for</label>
+                <input type="number" min={0} max={24} value={targetTimeOnlyH} onChange={e => setTargetTimeOnlyH(+e.target.value)} style={{ width: 50, padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14, textAlign: "center" }} />
+                <span style={{ fontSize: 13, color: "#9ca3af" }}>h</span>
+                <input type="number" min={0} max={59} value={targetTimeOnlyM} onChange={e => setTargetTimeOnlyM(+e.target.value)} style={{ width: 50, padding: "6px 8px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14, textAlign: "center" }} />
+                <span style={{ fontSize: 13, color: "#9ca3af" }}>min</span>
+              </div>
+              <div style={{ display: "flex", gap: 24, marginTop: 12, fontSize: 13, color: "#6b7280" }}>
+                <span>Avg pace: <strong style={{ color: "#1f2937" }}>{formatPace(computedPace)}/km</strong></span>
+                <span>Distance: <strong style={{ color: "#1f2937" }}>{activeTrail.distance} km</strong></span>
+                <span>Base BPM: <strong style={{ color: bpmToColor(baseBpm) }}>{Math.round(baseBpm)}</strong></span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Section 3: Generate ───────────────────────────── */}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 32, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <label style={{ fontSize: 13, color: "#6b7280" }}>Genre</label>
+            <select value={genreFilter} onChange={e => setGenreFilter(e.target.value)} style={{ padding: "8px 12px", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 13, background: "#fff" }}>
+              {genres.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
+          </div>
+          {isSpotifyConnected && (
+            <span style={{ fontSize: 11, color: "#1DB954", fontWeight: 500 }}>&#10003; Will use real Spotify tracks</span>
+          )}
+          <button onClick={handleGenerate} disabled={generating} style={{
+            padding: "12px 32px", background: generating ? "#93c5fd" : "linear-gradient(135deg, #3b82f6, #8b5cf6)",
+            color: "#fff", border: "none", borderRadius: 12, fontSize: 15, fontWeight: 600,
+            cursor: generating ? "wait" : "pointer", boxShadow: "0 2px 8px rgba(59,130,246,0.3)", marginLeft: "auto"
+          }}>
+            {generating ? "Generating..." : "Generate Playlist"}
+          </button>
+        </div>
+
+        {/* ── Results ─────────────────────────────────────── */}
+        {playlist.length > 0 && (
+          <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e5e7eb", overflow: "hidden" }}>
+            <div style={{ padding: 24, borderBottom: "1px solid #f3f4f6" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <h2 style={{ margin: "0 0 4px 0", fontSize: 20, fontWeight: 700, color: "#1f2937" }}>{activeTrail.name}</h2>
+                  <p style={{ margin: 0, fontSize: 13, color: "#9ca3af" }}>
+                    {playlist.length} tracks &middot; {formatTime(totalDuration)} &middot; Avg {avgBpm} BPM &middot; {formatPace(computedPace)}/km
+                    {hasRealTracks && <span style={{ color: "#1DB954" }}> &middot; Spotify tracks</span>}
+                  </p>
+                </div>
+                {isSpotifyConnected ? (
+                  <button onClick={handleExportToSpotify} disabled={exporting || !hasRealTracks} style={{
+                    padding: "8px 16px", background: hasRealTracks ? "#1DB954" : "#d1d5db", color: "#fff", border: "none",
+                    borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: hasRealTracks && !exporting ? "pointer" : "not-allowed",
+                    display: "flex", alignItems: "center", gap: 6, opacity: exporting ? 0.7 : 1
+                  }}>
+                    <span style={{ fontSize: 16 }}>&#9654;</span> {exporting ? "Creating..." : "Save to Spotify"}
+                  </button>
+                ) : (
+                  <button onClick={handleConnect} style={{
+                    padding: "8px 16px", background: "#1DB954", color: "#fff", border: "none",
+                    borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                    display: "flex", alignItems: "center", gap: 6
+                  }}>
+                    <span style={{ fontSize: 16 }}>&#9654;</span> Connect to save
+                  </button>
+                )}
+              </div>
+
+              {/* Export result */}
+              {exportResult && exportResult.success && (
+                <div style={{ marginTop: 16, padding: 16, background: "#f0fdf4", borderRadius: 12, border: "1px solid #bbf7d0" }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#166534" }}>Playlist created on Spotify!</div>
+                  <p style={{ margin: "6px 0 0", fontSize: 13, color: "#15803d" }}>
+                    "{exportResult.name}" — {exportResult.trackCount} tracks added.
+                  </p>
+                  {exportResult.url && (
+                    <a href={exportResult.url} target="_blank" rel="noopener noreferrer" style={{
+                      display: "inline-block", marginTop: 8, padding: "6px 16px", background: "#1DB954", color: "#fff",
+                      borderRadius: 16, fontSize: 13, fontWeight: 600, textDecoration: "none"
+                    }}>Open in Spotify</a>
+                  )}
+                </div>
+              )}
+              {exportResult && exportResult.error && (
+                <div style={{ marginTop: 16, padding: 12, background: "#fef2f2", borderRadius: 10, border: "1px solid #fecaca", fontSize: 13, color: "#991b1b" }}>
+                  Export failed: {exportResult.error}
+                </div>
+              )}
+
+              {/* Mock tracks notice */}
+              {!hasRealTracks && (
+                <div style={{ marginTop: 12, padding: 10, background: "#fefce8", borderRadius: 8, border: "1px solid #fde68a", fontSize: 12, color: "#92400e" }}>
+                  These are demo tracks. Connect Spotify and regenerate to get real tracks matched by BPM.
+                </div>
+              )}
+            </div>
+
+            <div style={{ padding: "16px 24px", borderBottom: "1px solid #f3f4f6" }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#9ca3af", marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>BPM Timeline</div>
+              <BpmTimeline playlist={playlist} totalMinutes={computedTotalMinutes} />
+            </div>
+
+            <div style={{ padding: "8px 24px 24px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "32px 1fr 70px 60px 80px", gap: 12, padding: "8px 0", borderBottom: "1px solid #e5e7eb" }}>
+                <span style={{ fontSize: 10, color: "#9ca3af", textTransform: "uppercase", textAlign: "center" }}>#</span>
+                <span style={{ fontSize: 10, color: "#9ca3af", textTransform: "uppercase" }}>Title</span>
+                <span style={{ fontSize: 10, color: "#9ca3af", textTransform: "uppercase" }}>Tempo</span>
+                <span style={{ fontSize: 10, color: "#9ca3af", textTransform: "uppercase" }}>Dur.</span>
+                <span style={{ fontSize: 10, color: "#9ca3af", textTransform: "uppercase" }}>Terrain</span>
+              </div>
+              {playlist.map((track, i) => <TrackRow key={track.id + "-" + i} track={track} index={i} />)}
+            </div>
+          </div>
+        )}
+
+        {playlist.length === 0 && (
+          <div style={{ textAlign: "center", padding: "60px 20px", color: "#9ca3af" }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>&#127939;</div>
+            <p style={{ fontSize: 16, fontWeight: 500, color: "#6b7280" }}>Pick a trail, set your target, and hit Generate</p>
+            <p style={{ fontSize: 13 }}>{isSpotifyConnected ? "Connected to Spotify — real BPM-matched tracks!" : "Connect Spotify for real tracks, or try with demo data"}</p>
+          </div>
+        )}
+      </main>
+
+      <footer style={{ textAlign: "center", padding: "32px 0", color: "#d1d5db", fontSize: 12 }}>
+        PaceSync &middot; French Trail Edition &middot; Spotify integration
+      </footer>
+    </div>
+  );
+}

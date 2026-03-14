@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Run Drop Card Preview</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: linear-gradient(135deg, #F5F7FA 0%, #E0E6EF 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 480px;
+      width: 100%;
+    }
+    .label {
+      text-align: center;
+      color: #4B5E7A;
+      font-size: 0.85rem;
+      margin-bottom: 12px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .run-drop-card {
+      background: linear-gradient(135deg, #1A2744 0%, #121D33 100%);
+      border-radius: 16px;
+      padding: 24px;
+      color: white;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 12px 40px rgba(26, 39, 68, 0.3);
+    }
+    .run-drop-card::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -50%;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle, rgba(255, 107, 84, 0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .run-drop-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .run-drop-badge {
+      background: linear-gradient(135deg, #FF6B54, #FF8C42);
+      color: white;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .run-drop-brand {
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.4);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    .run-drop-elev-svg {
+      width: 100%;
+      height: 80px;
+      margin-bottom: 16px;
+    }
+    .run-drop-stats {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      padding: 12px 0;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .run-drop-stats div {
+      text-align: center;
+    }
+    .run-drop-stats span {
+      font-size: 0.7rem;
+      color: rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .run-drop-stats strong {
+      display: block;
+      font-size: 1.1rem;
+      color: #FF6B54;
+      margin-top: 2px;
+    }
+    .run-drop-track {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+    .run-drop-track-icon {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #FF6B54, #FF8C42);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      flex-shrink: 0;
+    }
+    .run-drop-track-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .run-drop-track-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .run-drop-track-artist {
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.5);
+    }
+    .run-drop-track-bpm {
+      background: rgba(255, 107, 84, 0.15);
+      color: #FF6B54;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .share-btn {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #FF6B54 0%, #FF8C42 100%);
+      border: none;
+      border-radius: 10px;
+      color: white;
+      font-weight: 700;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      letter-spacing: 0.5px;
+    }
+    .share-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(255, 107, 84, 0.4);
+    }
+    .note {
+      text-align: center;
+      color: #8494AD;
+      font-size: 0.8rem;
+      margin-top: 20px;
+      line-height: 1.5;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { r: 5; opacity: 1; }
+      50% { r: 8; opacity: 0.6; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="label">Appears after generating a playlist on a trail with elevation</div>
+    <div class="run-drop-card">
+      <div class="run-drop-header">
+        <div class="run-drop-badge">The Drop</div>
+        <div class="run-drop-brand">PaceDrop</div>
+      </div>
+
+      <svg class="run-drop-elev-svg" viewBox="0 0 400 80" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="dropFill" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="rgba(15, 166, 138, 0.3)" />
+            <stop offset="100%" stop-color="rgba(255, 107, 84, 0.1)" />
+          </linearGradient>
+          <linearGradient id="dropStroke" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#0FA68A" />
+            <stop offset="55%" stop-color="#FF6B54" />
+            <stop offset="100%" stop-color="#FF8C42" />
+          </linearGradient>
+        </defs>
+        <!-- Elevation profile path (simulating Mont Blanc) -->
+        <path d="M0 65 L20 55 L50 40 L80 25 L110 18 L140 10 L170 6 L200 12 L230 30 L260 50 L280 40 L310 22 L330 10 L350 5 L370 15 L400 35 L400 80 L0 80 Z" fill="url(#dropFill)" />
+        <path d="M0 65 L20 55 L50 40 L80 25 L110 18 L140 10 L170 6 L200 12 L230 30 L260 50 L280 40 L310 22 L330 10 L350 5 L370 15 L400 35" fill="none" stroke="url(#dropStroke)" stroke-width="2.5" />
+        <!-- Pulsing drop marker -->
+        <circle cx="230" cy="30" r="6" fill="#FF6B54" stroke="white" stroke-width="2">
+          <animate attributeName="r" values="5;8;5" dur="2s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="1;0.6;1" dur="2s" repeatCount="indefinite" />
+        </circle>
+        <line x1="230" y1="40" x2="230" y2="80" stroke="rgba(255, 107, 84, 0.3)" stroke-width="1" stroke-dasharray="3,3" />
+      </svg>
+
+      <div class="run-drop-stats">
+        <div><span>Drop</span><strong>340m</strong></div>
+        <div><span>Peak BPM</span><strong>172</strong></div>
+        <div><span>Elevation</span><strong>2,040m</strong></div>
+      </div>
+
+      <div class="run-drop-track">
+        <div class="run-drop-track-icon">&#9835;</div>
+        <div class="run-drop-track-info">
+          <div class="run-drop-track-name">Blinding Lights</div>
+          <div class="run-drop-track-artist">The Weeknd</div>
+        </div>
+        <div class="run-drop-track-bpm">172 BPM</div>
+      </div>
+
+      <button class="share-btn" onclick="alert('Share Your Drop copies a link or opens the native share sheet on mobile!')">Share Your Drop</button>
+    </div>
+
+    <div class="note">
+      This card appears when you generate a playlist for a trail with elevation changes.<br>
+      It finds the steepest descent on your route and pairs it with the highest-energy track.
+    </div>
+  </div>
+</body>
+</html>
