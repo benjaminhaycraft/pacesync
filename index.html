@@ -1678,10 +1678,12 @@
     }
 
     function gradientToBpm(gradient, baseBpm) {
-      const uphillDrop = Math.max(0, gradient) * 250;
-      const downhillBoost = Math.max(0, -gradient) * 200;
-      const bpm = baseBpm - uphillDrop + downhillBoost;
-      return Math.round(Math.max(95, Math.min(180, bpm)));
+      // gradient is a fraction: 0.05 = 5% grade, -0.08 = 8% downhill
+      // Steep uphills → slower BPM (effort-matching), downhills → faster BPM (momentum)
+      // ±15 BPM per 10% grade
+      const bpmShift = -gradient * 150; // e.g., +5% grade → -7.5 BPM, -8% grade → +12 BPM
+      const bpm = baseBpm + bpmShift;
+      return Math.round(Math.max(105, Math.min(185, bpm)));
     }
 
     function paceToBaseBpm(minPerKm) {
@@ -1689,15 +1691,22 @@
       return Math.max(105, Math.min(175, bpm));
     }
 
-    function calculateElevationGradient(elevProfile) {
+    function calculateElevationGradient(elevProfile, distanceKm) {
+      if (!elevProfile || elevProfile.length < 2) return [];
       const segments = [];
-      const segmentSize = Math.ceil(elevProfile.length / 20);
-      for (let i = 0; i < elevProfile.length - 1; i += segmentSize) {
-        const endIdx = Math.min(i + segmentSize, elevProfile.length - 1);
+      const numPoints = elevProfile.length;
+      const numSegments = numPoints - 1;
+      // Each profile point is evenly spaced along the trail
+      const segmentDistM = ((distanceKm || 10) * 1000) / numSegments;
+      // Group into ~10–15 music segments for variety
+      const targetSegments = Math.min(numSegments, Math.max(8, Math.round((distanceKm || 10) / 2)));
+      const pointsPerSeg = Math.max(1, Math.floor(numSegments / targetSegments));
+      for (let i = 0; i < numSegments; i += pointsPerSeg) {
+        const endIdx = Math.min(i + pointsPerSeg, numSegments);
         const elevGain = elevProfile[endIdx] - elevProfile[i];
-        const distance = (segmentSize / elevProfile.length) * 100;
-        const gradient = distance > 0 ? elevGain / distance : 0;
-        segments.push({ gradient, elevGain, startIdx: i, endIdx });
+        const horizDistM = (endIdx - i) * segmentDistM;
+        const gradient = horizDistM > 0 ? elevGain / horizDistM : 0; // proper grade as fraction
+        segments.push({ gradient, elevGain, startIdx: i, endIdx, distM: horizDistM });
       }
       return segments;
     }
@@ -1951,9 +1960,9 @@
 
         return {
           basePace: Math.round(basePace),
-          gradeCoeff: Math.round(gradeCoeff),
+          gradeCoeff: Math.round(gradeCoeff * 10) / 10,
           baseCadence: Math.round(baseCadence),
-          cadenceGradeCoeff: Math.round(cadenceGradeCoeff),
+          cadenceGradeCoeff: Math.round(cadenceGradeCoeff * 10) / 10,
           hrDrift,
           hrByQuintile,
           avgPace: Math.round(avgPace),
@@ -1999,13 +2008,19 @@
           else if (raceProgress > 0.67) fatigueMultiplier = 1.03;
 
           // ── Personal cadence for this grade ──
+          // Grade-adjusted cadence: steep uphills → slower cadence, downhills → faster
+          // Use a minimum grade sensitivity of ±80 spm per 100% grade even if model shows less
+          const effectiveGradeCoeff = Math.abs(model.cadenceGradeCoeff) > 20 ? model.cadenceGradeCoeff : (grade >= 0 ? -80 : 60);
           const cadence = Math.round(
             Math.max(140, Math.min(190,
-              model.baseCadence + model.cadenceGradeCoeff * grade
+              model.baseCadence + effectiveGradeCoeff * grade
             ))
           );
 
-          const targetBpm = Math.round(cadence * fatigueMultiplier);
+          // BPM = cadence adjusted by terrain intensity + fatigue
+          // Steep uphills get slower music (effort-matching), downhills get faster (momentum)
+          const gradeBoost = grade * -120; // ±12 BPM per 10% grade
+          const targetBpm = Math.round((cadence + gradeBoost) * fatigueMultiplier);
 
           let emotionalZone;
           if (raceProgress < 0.3) emotionalZone = "controlled";
@@ -2892,6 +2907,9 @@
       const [spotifyUser, setSpotifyUser] = useState(null);
       const [selectedTrail, setSelectedTrail] = useState(null);
       const [gpxTrail, setGpxTrail] = useState(null);
+      const [userTrails, setUserTrails] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("paceDropUserTrails") || "[]"); } catch { return []; }
+      });
       const [flatRunActive, setFlatRunActive] = useState(false);
       const [flatRunDistance, setFlatRunDistance] = useState(10);
       const [targetMode, setTargetMode] = useState("pace");
@@ -3074,8 +3092,10 @@
           }
         : null;
 
+      const allTrails = React.useMemo(() => [...TRAIL_DATABASE, ...userTrails], [userTrails]);
+
       const filteredTrails = React.useMemo(() => {
-        let trails = TRAIL_DATABASE;
+        let trails = allTrails;
 
         // Text search
         if (trailSearch.trim()) {
@@ -3102,12 +3122,12 @@
         }
 
         return trails;
-      }, [trailSearch, trailFilter]);
+      }, [trailSearch, trailFilter, allTrails]);
 
       const currentTrail = flatRunTrail || gpxTrail || selectedTrail;
 
       const trailElevProfile = currentTrail ? currentTrail.profile : [];
-      const elevSegments = currentTrail ? calculateElevationGradient(trailElevProfile) : [];
+      const elevSegments = currentTrail ? calculateElevationGradient(trailElevProfile, currentTrail.distance) : [];
 
       const trailDistance = currentTrail ? currentTrail.distance : 0;
 
@@ -3264,11 +3284,15 @@
             const progressionFactor = 0.88 + 0.17 * Math.pow(progress, 1.3);
             const rawBpm = gradientToBpm(seg.gradient, baseBpm);
             let bpm;
-            if (racePlan && racePlan.segments[segIdx]) {
-              // Use data-science driven BPM from personal model
-              bpm = racePlan.segments[segIdx].targetBpm;
+            if (racePlan && racePlan.segments.length > 0) {
+              // Map elevSegment index to racePlan segments (may have different counts)
+              const rpLen = racePlan.segments.length;
+              const rpStart = Math.floor((segIdx / totalSegments) * rpLen);
+              const rpEnd = Math.min(rpLen, Math.floor(((segIdx + 1) / totalSegments) * rpLen));
+              const rpSlice = racePlan.segments.slice(rpStart, Math.max(rpStart + 1, rpEnd));
+              bpm = Math.round(rpSlice.reduce((a, s) => a + s.targetBpm, 0) / rpSlice.length);
             } else {
-              bpm = Math.round(Math.max(95, Math.min(185, rawBpm * progressionFactor)));
+              bpm = Math.round(Math.max(105, Math.min(185, rawBpm * progressionFactor)));
             }
             let selectedTrack = null;
 
@@ -3416,15 +3440,29 @@
           try {
             const gpxData = parseGPX(evt.target?.result || "");
             const processed = processGPXPoints(gpxData.points);
-            setGpxTrail({
+            const newTrail = {
+              id: `gpx-${Date.now()}`,
               name: gpxData.name,
+              location: "Imported route",
               distance: processed.distance,
               elevGain: processed.elevGain,
+              region: "Custom",
+              difficulty: processed.elevGain / processed.distance > 60 ? "Hard" : processed.elevGain / processed.distance > 30 ? "Medium" : "Easy",
+              country: "",
+              type: "trail",
+              source: "gpx",
               profile: processed.profile,
+            };
+            setGpxTrail(newTrail);
+            // Add to persistent user trail library
+            setUserTrails(prev => {
+              const updated = [...prev, newTrail];
+              localStorage.setItem("paceDropUserTrails", JSON.stringify(updated));
+              return updated;
             });
             setSelectedTrail(null);
             setFlatRunActive(false);
-            setMessage({ type: "success", text: `GPX loaded: ${gpxData.name}` });
+            setMessage({ type: "success", text: `GPX loaded: ${gpxData.name} — added to your race library` });
           } catch (err) {
             setMessage({ type: "error", text: `GPX error: ${err.message}` });
           }
@@ -4007,10 +4045,10 @@
             {/* Filter Chips */}
             <div className="trail-filter-chips">
               {[
-                { key: "all", label: "All", count: TRAIL_DATABASE.length },
-                { key: "road", label: "Road", count: TRAIL_DATABASE.filter(t => t.type === "road").length },
-                { key: "trail", label: "Trail", count: TRAIL_DATABASE.filter(t => t.type === "trail").length },
-                { key: "upcoming", label: "Upcoming", count: (() => { const now = new Date(); const m3 = new Date(now.getTime() + 90*24*60*60*1000); return TRAIL_DATABASE.filter(t => t.date && new Date(t.date) >= now && new Date(t.date) <= m3).length; })() },
+                { key: "all", label: "All", count: allTrails.length },
+                { key: "road", label: "Road", count: allTrails.filter(t => t.type === "road").length },
+                { key: "trail", label: "Trail", count: allTrails.filter(t => t.type === "trail").length },
+                { key: "upcoming", label: "Upcoming", count: (() => { const now = new Date(); const m3 = new Date(now.getTime() + 90*24*60*60*1000); return allTrails.filter(t => t.date && new Date(t.date) >= now && new Date(t.date) <= m3).length; })() },
               ].map((f) => (
                 <button
                   key={f.key}
@@ -4060,7 +4098,14 @@
                       try {
                         const gpxData = parseGPX(evt.target?.result || "");
                         const processed = processGPXPoints(gpxData.points);
-                        setGpxTrail({ name: gpxData.name, distance: processed.distance, elevGain: processed.elevGain, profile: processed.profile });
+                        const newTrail = {
+                          id: `gpx-${Date.now()}`, name: gpxData.name, location: "Imported route",
+                          distance: processed.distance, elevGain: processed.elevGain, region: "Custom",
+                          difficulty: processed.elevGain / processed.distance > 60 ? "Hard" : processed.elevGain / processed.distance > 30 ? "Medium" : "Easy",
+                          country: "", type: "trail", source: "gpx", profile: processed.profile,
+                        };
+                        setGpxTrail(newTrail);
+                        setUserTrails(prev => { const u = [...prev, newTrail]; localStorage.setItem("paceDropUserTrails", JSON.stringify(u)); return u; });
                         setSelectedTrail(null); setFlatRunActive(false);
                       } catch (err) { setMessage({ type: "error", text: `Could not read this file` }); }
                     };
@@ -4338,6 +4383,74 @@
             >
               {loading ? "Generating..." : "Generate Playlist"}
             </button>
+          )}
+
+          {/* Race Plan — optimized pacing from personal model */}
+          {racePlan && currentTrail && (
+            <div className="section" style={{ marginBottom: "20px" }}>
+              <div className="section-title">
+                <span className="section-icon">🏁</span>
+                Your Race Plan — {currentTrail.name}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", marginBottom: "16px" }}>
+                <div style={{ textAlign: "center", padding: "12px", background: "rgba(224,78,42,0.04)", borderRadius: "10px" }}>
+                  <div style={{ fontSize: "0.7rem", color: "var(--stone-400)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Strategy</div>
+                  <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--ember)", marginTop: "4px" }}>Constant Effort</div>
+                </div>
+                <div style={{ textAlign: "center", padding: "12px", background: "rgba(14,165,160,0.04)", borderRadius: "10px" }}>
+                  <div style={{ fontSize: "0.7rem", color: "var(--stone-400)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Avg Pace</div>
+                  <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--glacier)", marginTop: "4px" }}>{PerformanceLab.formatPace(racePlan.avgPace)}/km</div>
+                </div>
+                <div style={{ textAlign: "center", padding: "12px", background: "rgba(230,168,23,0.04)", borderRadius: "10px" }}>
+                  <div style={{ fontSize: "0.7rem", color: "var(--stone-400)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Est. Finish</div>
+                  <div style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--gold-dark)", marginTop: "4px" }}>{Math.floor(racePlan.totalTimeEstimate / 3600)}h{String(Math.floor((racePlan.totalTimeEstimate % 3600) / 60)).padStart(2, "0")}</div>
+                </div>
+              </div>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.75rem" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "2px solid var(--stone-100)" }}>
+                      <th style={{ padding: "8px 6px", textAlign: "left", color: "var(--stone-400)", fontWeight: 600 }}>Seg</th>
+                      <th style={{ padding: "8px 6px", textAlign: "right", color: "var(--stone-400)", fontWeight: 600 }}>Grade</th>
+                      <th style={{ padding: "8px 6px", textAlign: "right", color: "var(--stone-400)", fontWeight: 600 }}>Pace</th>
+                      <th style={{ padding: "8px 6px", textAlign: "right", color: "var(--stone-400)", fontWeight: 600 }}>BPM</th>
+                      <th style={{ padding: "8px 6px", textAlign: "right", color: "var(--stone-400)", fontWeight: 600 }}>HR</th>
+                      <th style={{ padding: "8px 6px", textAlign: "center", color: "var(--stone-400)", fontWeight: 600 }}>Zone</th>
+                      <th style={{ padding: "8px 6px", textAlign: "center", color: "var(--stone-400)", fontWeight: 600 }}>Mood</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {racePlan.segments.map((seg, i) => (
+                      <tr key={i} style={{ borderBottom: "1px solid var(--stone-100)" }}>
+                        <td style={{ padding: "6px", fontWeight: 600, color: "var(--ridge)" }}>{i + 1}</td>
+                        <td style={{ padding: "6px", textAlign: "right", color: seg.grade > 0 ? "var(--ember)" : seg.grade < 0 ? "var(--glacier)" : "var(--stone-500)", fontWeight: 600 }}>
+                          {seg.grade > 0 ? "↗" : seg.grade < 0 ? "↘" : "→"} {Math.abs(seg.grade)}%
+                        </td>
+                        <td style={{ padding: "6px", textAlign: "right", color: "var(--ridge)" }}>{PerformanceLab.formatPace(seg.paceSec)}</td>
+                        <td style={{ padding: "6px", textAlign: "right" }}>
+                          <span style={{
+                            padding: "2px 8px", borderRadius: "10px", fontWeight: 700, fontSize: "0.72rem",
+                            background: seg.targetBpm > 165 ? "rgba(224,78,42,0.1)" : seg.targetBpm > 150 ? "rgba(230,168,23,0.1)" : "rgba(14,165,160,0.1)",
+                            color: seg.targetBpm > 165 ? "var(--ember)" : seg.targetBpm > 150 ? "var(--gold-dark)" : "var(--glacier)",
+                          }}>{seg.targetBpm}</span>
+                        </td>
+                        <td style={{ padding: "6px", textAlign: "right", color: "var(--stone-500)" }}>{seg.estimatedHR}</td>
+                        <td style={{ padding: "6px", textAlign: "center" }}>
+                          <span style={{
+                            padding: "2px 6px", borderRadius: "6px", fontSize: "0.68rem", fontWeight: 600,
+                            background: seg.hrZone === "Z5" ? "rgba(224,78,42,0.12)" : seg.hrZone === "Z4" ? "rgba(230,168,23,0.12)" : seg.hrZone === "Z3" ? "rgba(14,165,160,0.12)" : "rgba(100,100,120,0.08)",
+                            color: seg.hrZone === "Z5" ? "var(--ember)" : seg.hrZone === "Z4" ? "var(--gold-dark)" : seg.hrZone === "Z3" ? "var(--glacier)" : "var(--stone-500)",
+                          }}>{seg.hrZone}</span>
+                        </td>
+                        <td style={{ padding: "6px", textAlign: "center", fontSize: "0.7rem", color: "var(--stone-400)" }}>
+                          {seg.emotionalZone === "controlled" ? "🧘 Controlled" : seg.emotionalZone === "dissociative" ? "🎧 Flow" : "🔥 Push"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
 
           {/* Playlist Results */}
