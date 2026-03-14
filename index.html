@@ -3519,6 +3519,7 @@
                 }} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--stone-400)", fontSize: "0.7rem", marginLeft: "4px" }}>×</button>
               </div>
             ) : (
+              <React.Fragment>
               <button onClick={() => {
                 document.getElementById("garmin-file-input").click();
               }} style={{
@@ -3549,6 +3550,7 @@
                   e.target.value = "";
                 }}
               />
+              </React.Fragment>
             )}
 
             <div style={{ flex: 1 }} />
