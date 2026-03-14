@@ -12,18 +12,19 @@
     }
 
     :root {
-      --coral: #FF6B54;
-      --coral-dark: #E85A44;
+      --coral: #E45A3B;
+      --coral-dark: #C94930;
       --teal: #0FA68A;
       --teal-dark: #0D8E76;
-      --navy: #1A2744;
-      --navy-deep: #121D33;
-      --amber: #FF8C42;
-      --slate-600: #4B5E7A;
-      --slate-400: #8494AD;
+      --navy: #0D1B2A;
+      --navy-deep: #080F1A;
+      --amber: #E8782F;
+      --accent-blue: #2D6CDF;
+      --slate-600: #415A77;
+      --slate-400: #778DA9;
       --slate-200: #C8D1DC;
       --slate-100: #E8ECF1;
-      --cloud: #F5F7FA;
+      --cloud: #F7F8FA;
       --green-500: #10b981;
       --green-600: #059669;
       --red-500: #ef4444;
@@ -31,8 +32,8 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
-      background: linear-gradient(135deg, var(--cloud) 0%, #E0E6EF 100%);
+      font-family: "Helvetica Neue", Helvetica, Arial, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--cloud);
       color: var(--navy);
       line-height: 1.6;
       min-height: 100vh;
@@ -44,51 +45,63 @@
       margin: 0 auto;
     }
 
-    /* Header & Logo */
+    /* Header & Logo — Hoka/Salomon-inspired bold athletic branding */
     header {
       text-align: center;
       margin-bottom: 40px;
-      padding-bottom: 30px;
-      border-bottom: 1px solid rgba(26, 39, 68, 0.1);
+      padding: 36px 20px 30px;
+      background: var(--navy);
+      border-radius: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    header::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--coral), var(--amber), var(--coral));
     }
 
     .logo-container {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 12px;
-      margin-bottom: 12px;
+      gap: 14px;
+      margin-bottom: 10px;
     }
 
     .logo-icon {
       width: 44px;
       height: 44px;
-      background: linear-gradient(135deg, var(--coral) 0%, var(--amber) 100%);
-      border-radius: 12px;
+      background: var(--coral);
+      border-radius: 10px;
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 24px;
       font-weight: bold;
       color: white;
-      box-shadow: 0 4px 12px rgba(255, 107, 84, 0.3);
     }
 
     h1 {
-      font-size: 2.5rem;
-      margin-bottom: 8px;
-      background: linear-gradient(90deg, var(--coral), var(--amber));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      font-weight: 700;
+      font-size: 2.6rem;
+      margin-bottom: 6px;
+      color: white;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      text-transform: uppercase;
     }
 
     .tagline {
-      color: var(--slate-600);
-      font-size: 1.1rem;
-      font-weight: 300;
-      letter-spacing: 0.5px;
+      color: var(--slate-400);
+      font-size: 0.95rem;
+      font-weight: 400;
+      letter-spacing: 3px;
+      text-transform: uppercase;
     }
 
     /* Spotify Connect Bar */
@@ -136,23 +149,26 @@
     }
 
     .btn {
-      padding: 10px 20px;
+      padding: 11px 22px;
       border: none;
       border-radius: 8px;
-      font-weight: 600;
+      font-weight: 700;
       cursor: pointer;
-      font-size: 0.95rem;
-      transition: all 0.3s ease;
+      font-size: 0.85rem;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      transition: all 0.25s ease;
     }
 
     .btn-primary {
-      background: linear-gradient(135deg, var(--coral) 0%, var(--coral-dark) 100%);
+      background: var(--coral);
       color: white;
     }
 
     .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 8px 16px rgba(255, 107, 84, 0.3);
+      background: var(--coral-dark);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(228, 90, 59, 0.3);
     }
 
     .btn-secondary {
@@ -179,25 +195,27 @@
     /* Section Styling */
     .section {
       background: white;
-      border: 1px solid rgba(26, 39, 68, 0.08);
+      border: 1px solid rgba(13, 27, 42, 0.06);
       border-radius: 14px;
       padding: 28px;
-      margin-bottom: 24px;
-      box-shadow: 0 2px 12px rgba(26, 39, 68, 0.06);
+      margin-bottom: 20px;
+      box-shadow: 0 1px 4px rgba(13, 27, 42, 0.04);
     }
 
     .section-title {
-      font-size: 1.4rem;
+      font-size: 1.15rem;
       margin-bottom: 20px;
       color: var(--navy);
       display: flex;
       align-items: center;
       gap: 10px;
       font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
     }
 
     .section-icon {
-      font-size: 1.6rem;
+      font-size: 1.4rem;
     }
 
     /* GPX Import */
@@ -262,24 +280,24 @@
     }
 
     .trail-card {
-      background: var(--cloud);
-      border: 1px solid rgba(26, 39, 68, 0.08);
-      border-radius: 10px;
-      padding: 16px;
+      background: white;
+      border: 1.5px solid rgba(13, 27, 42, 0.06);
+      border-radius: 12px;
+      padding: 18px;
       cursor: pointer;
-      transition: all 0.3s ease;
+      transition: all 0.25s ease;
     }
 
     .trail-card:hover {
-      transform: translateY(-4px);
-      border-color: var(--coral);
-      background: white;
-      box-shadow: 0 12px 24px rgba(255, 107, 84, 0.12);
+      transform: translateY(-3px);
+      border-color: var(--navy);
+      box-shadow: 0 8px 20px rgba(13, 27, 42, 0.1);
     }
 
     .trail-card.selected {
       border-color: var(--coral);
-      background: rgba(255, 107, 84, 0.06);
+      background: rgba(228, 90, 59, 0.04);
+      box-shadow: 0 0 0 2px rgba(228, 90, 59, 0.15);
     }
 
     .flat-run-section {
@@ -388,14 +406,16 @@
     }
 
     .trail-card h3 {
-      font-size: 1.1rem;
-      margin-bottom: 6px;
+      font-size: 0.95rem;
+      margin-bottom: 4px;
       color: var(--navy);
+      font-weight: 700;
+      letter-spacing: 0.2px;
     }
 
     .trail-location {
-      font-size: 0.85rem;
-      color: var(--slate-600);
+      font-size: 0.8rem;
+      color: var(--slate-400);
       margin-bottom: 10px;
     }
 
@@ -403,8 +423,8 @@
       display: flex;
       justify-content: space-between;
       gap: 10px;
-      margin-bottom: 12px;
-      font-size: 0.9rem;
+      margin-bottom: 10px;
+      font-size: 0.85rem;
     }
 
     .trail-stat {
@@ -413,14 +433,16 @@
 
     .trail-stat-label {
       color: var(--slate-400);
-      font-size: 0.75rem;
+      font-size: 0.65rem;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 1px;
+      font-weight: 600;
     }
 
     .trail-stat-value {
       color: var(--navy);
-      font-weight: 600;
+      font-weight: 700;
+      font-size: 0.95rem;
     }
 
     .trail-sparkline {
@@ -453,6 +475,128 @@
     .difficulty-hard {
       background: rgba(255, 107, 84, 0.12);
       color: var(--coral);
+    }
+
+    .trail-search-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .trail-search-wrapper {
+      position: relative;
+      flex: 1;
+    }
+
+    .trail-search-input {
+      flex: 1;
+      padding: 10px 16px 10px 40px;
+      border: 2px solid var(--slate-200);
+      border-radius: 12px;
+      font-size: 0.95rem;
+      background: white;
+      transition: border-color 0.2s;
+      outline: none;
+    }
+
+    .trail-search-input:focus {
+      border-color: var(--coral);
+    }
+
+    .trail-search-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--slate-400);
+      font-size: 0.9rem;
+    }
+
+    .trail-filter-chips {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .filter-chip {
+      padding: 6px 16px;
+      border-radius: 6px;
+      border: 1.5px solid var(--slate-200);
+      background: white;
+      font-size: 0.72rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: var(--slate-400);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    .filter-chip:hover {
+      border-color: var(--navy);
+      color: var(--navy);
+    }
+
+    .filter-chip.active {
+      background: var(--navy);
+      color: white;
+      border-color: var(--navy);
+    }
+
+    .trail-card-badges {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .type-badge {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .type-badge.road {
+      background: #EEF2FF;
+      color: #4F46E5;
+    }
+
+    .type-badge.trail {
+      background: #ECFDF5;
+      color: #059669;
+    }
+
+    .upcoming-badge {
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-weight: 600;
+      background: var(--coral);
+      color: white;
+      animation: pulse-soft 2s infinite;
+    }
+
+    @keyframes pulse-soft {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    .trail-country {
+      font-size: 0.85rem;
+      color: var(--slate-400);
+      margin-top: 2px;
+    }
+
+    .no-results-message {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--slate-400);
+      font-size: 0.95rem;
     }
 
     /* Elevation Chart */
@@ -742,10 +886,11 @@
     footer {
       text-align: center;
       margin-top: 50px;
-      padding-top: 30px;
-      border-top: 1px solid rgba(26, 39, 68, 0.1);
+      padding: 20px;
       color: var(--slate-400);
-      font-size: 0.9rem;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
     }
 
     /* Run Drop Card */
@@ -893,7 +1038,8 @@
     const SPOTIFY_REDIRECT_URI = "https://benjaminhaycraft.github.io/pacesync/";
     const SPOTIFY_SCOPES = "playlist-modify-public playlist-modify-private user-read-private user-top-read";
 
-    const FRENCH_TRAILS = [
+    const TRAIL_DATABASE = [
+      // === French Trails (Original) ===
       {
         id: "ecotrail-paris-20k",
         name: "EcoTrail de Paris 20K",
@@ -902,6 +1048,10 @@
         elevGain: 450,
         region: "Île-de-France",
         difficulty: "Easy",
+        country: "France",
+        type: "trail",
+        date: null,
+        website: null,
         profile: [100, 120, 145, 170, 160, 140, 120, 155, 175, 165, 140, 115, 95, 80, 60, 50, 45, 40, 38, 35],
       },
       {
@@ -912,6 +1062,10 @@
         elevGain: 3500,
         region: "Haute-Savoie",
         difficulty: "Hard",
+        country: "France",
+        type: "trail",
+        date: null,
+        website: null,
         profile: [900, 1050, 1250, 1480, 1600, 1800, 1950, 2040, 1900, 1650, 1300, 1450, 1700, 2000, 2080, 1900, 1700, 1500, 1300, 1100, 1035],
       },
       {
@@ -922,6 +1076,10 @@
         elevGain: 2540,
         region: "Haute-Savoie",
         difficulty: "Hard",
+        country: "France",
+        type: "trail",
+        date: null,
+        website: null,
         profile: [1035, 1100, 1250, 1450, 1650, 1877, 2000, 1850, 1600, 1350, 1100, 1035, 1150, 1400, 1700, 1950, 2200, 2285, 2100, 1800, 1500, 1200, 1035],
       },
       {
@@ -932,6 +1090,10 @@
         elevGain: 3600,
         region: "Occitanie",
         difficulty: "Hard",
+        country: "France",
+        type: "trail",
+        date: null,
+        website: null,
         profile: [380, 500, 700, 880, 750, 550, 380, 520, 750, 920, 800, 600, 400, 550, 780, 900, 720, 500, 380, 480, 700, 850, 680, 450, 380],
       },
       {
@@ -942,6 +1104,10 @@
         elevGain: 1900,
         region: "Auvergne-Rhône-Alpes",
         difficulty: "Medium",
+        country: "France",
+        type: "trail",
+        date: null,
+        website: null,
         profile: [520, 580, 640, 720, 680, 610, 570, 630, 700, 660, 590, 520, 480, 440, 400, 370, 330, 290, 250, 210, 175],
       },
       {
@@ -952,6 +1118,10 @@
         elevGain: 2000,
         region: "Auvergne",
         difficulty: "Medium",
+        country: "France",
+        type: "trail",
+        date: null,
+        website: null,
         profile: [1050, 1200, 1400, 1600, 1780, 1886, 1800, 1600, 1400, 1200, 1100, 1250, 1450, 1650, 1800, 1700, 1500, 1300, 1100, 1050],
       },
       {
@@ -962,6 +1132,10 @@
         elevGain: 800,
         region: "Bretagne",
         difficulty: "Easy",
+        country: "France",
+        type: "trail",
+        date: null,
+        website: null,
         profile: [10, 35, 65, 90, 70, 40, 15, 45, 80, 105, 85, 55, 25, 10, 40, 75, 95, 70, 45, 15, 10],
       },
       {
@@ -972,7 +1146,167 @@
         elevGain: 2600,
         region: "Auvergne-Rhône-Alpes",
         difficulty: "Hard",
+        country: "France",
+        type: "trail",
+        date: null,
+        website: null,
         profile: [220, 400, 650, 950, 1250, 1550, 1750, 1600, 1300, 1000, 700, 450, 300, 500, 850, 1200, 1500, 1350, 1050, 700, 400, 220],
+      },
+      // === Road Marathons ===
+      {
+        id: "paris-marathon",
+        name: "Paris Marathon",
+        location: "Paris",
+        distance: 42.2,
+        elevGain: 70,
+        region: "Île-de-France",
+        difficulty: "Easy",
+        country: "France",
+        type: "road",
+        date: "2026-04-05",
+        website: "https://www.parismarathon.com",
+        profile: [35, 40, 45, 50, 48, 45, 42, 45, 50, 52, 50, 48, 45, 42, 40, 38, 40, 42, 45, 48, 50, 52, 55, 50],
+      },
+      {
+        id: "nyc-marathon",
+        name: "New York City Marathon",
+        location: "New York",
+        distance: 42.2,
+        elevGain: 250,
+        region: "New York",
+        difficulty: "Medium",
+        country: "USA",
+        type: "road",
+        date: "2026-11-01",
+        website: "https://www.nycmarathon.org",
+        profile: [10, 15, 25, 35, 45, 55, 60, 55, 50, 45, 40, 35, 30, 35, 40, 45, 50, 55, 50, 45, 40, 35, 20, 10],
+      },
+      {
+        id: "london-marathon",
+        name: "London Marathon",
+        location: "London",
+        distance: 42.2,
+        elevGain: 40,
+        region: "England",
+        difficulty: "Easy",
+        country: "UK",
+        type: "road",
+        date: "2026-04-26",
+        website: "https://www.londonmarathonevents.co.uk",
+        profile: [5, 8, 10, 12, 15, 18, 20, 18, 15, 12, 10, 8, 5, 8, 10, 12, 15, 18, 20, 18, 15, 10, 8, 5],
+      },
+      {
+        id: "berlin-marathon",
+        name: "Berlin Marathon",
+        location: "Berlin",
+        distance: 42.2,
+        elevGain: 30,
+        region: "Berlin",
+        difficulty: "Easy",
+        country: "Germany",
+        type: "road",
+        date: "2026-09-27",
+        website: "https://www.berlin-marathon.com",
+        profile: [30, 32, 35, 38, 40, 42, 45, 44, 42, 40, 38, 35, 32, 30, 35, 38, 40, 42, 45, 43, 40, 35, 32, 30],
+      },
+      {
+        id: "tokyo-marathon",
+        name: "Tokyo Marathon",
+        location: "Tokyo",
+        distance: 42.2,
+        elevGain: 40,
+        region: "Tokyo",
+        difficulty: "Easy",
+        country: "Japan",
+        type: "road",
+        date: "2026-03-01",
+        website: "https://www.marathon.tokyo",
+        profile: [5, 10, 15, 18, 20, 22, 25, 24, 22, 20, 18, 15, 12, 10, 15, 18, 20, 22, 25, 23, 20, 15, 10, 5],
+      },
+      {
+        id: "boston-marathon",
+        name: "Boston Marathon",
+        location: "Boston",
+        distance: 42.2,
+        elevGain: 145,
+        region: "Massachusetts",
+        difficulty: "Medium",
+        country: "USA",
+        type: "road",
+        date: "2026-04-20",
+        website: "https://www.baa.org",
+        profile: [150, 145, 140, 135, 130, 125, 120, 115, 110, 100, 85, 70, 60, 55, 50, 50, 60, 80, 100, 110, 105, 95, 85, 70],
+      },
+      {
+        id: "chicago-marathon",
+        name: "Chicago Marathon",
+        location: "Chicago",
+        distance: 42.2,
+        elevGain: 25,
+        region: "Illinois",
+        difficulty: "Easy",
+        country: "USA",
+        type: "road",
+        date: "2026-10-11",
+        website: "https://www.chicagomarathon.com",
+        profile: [175, 177, 180, 182, 184, 185, 185, 184, 183, 182, 181, 180, 179, 178, 179, 180, 181, 182, 183, 184, 185, 184, 182, 180],
+      },
+      // === Major Trail/Ultra Races ===
+      {
+        id: "utmb-171k",
+        name: "UTMB 171K",
+        location: "Mont-Blanc Massif",
+        distance: 171,
+        elevGain: 10000,
+        region: "Alps",
+        difficulty: "Hard",
+        country: "France",
+        type: "trail",
+        date: "2026-08-28",
+        website: "https://www.utmbmontblanc.com",
+        profile: [1050, 1200, 1400, 1700, 2000, 2300, 2500, 2400, 2200, 2000, 1800, 1600, 1400, 1200, 1400, 1700, 2000, 2300, 2500, 2400, 2100, 1800, 1400, 1050],
+      },
+      {
+        id: "western-states-100",
+        name: "Western States 100",
+        location: "Sierra Nevada",
+        distance: 161,
+        elevGain: 5500,
+        region: "California",
+        difficulty: "Hard",
+        country: "USA",
+        type: "trail",
+        date: "2026-06-27",
+        website: "https://www.wser.org",
+        profile: [900, 1100, 1400, 1800, 2200, 2500, 2600, 2700, 2600, 2400, 2100, 1800, 1500, 1200, 1000, 900, 1100, 1400, 1700, 2000, 2300, 2600, 2700, 2500],
+      },
+      {
+        id: "zegama-aizkorri",
+        name: "Zegama-Aizkorri Marathon",
+        location: "Basque Country",
+        distance: 42.2,
+        elevGain: 5400,
+        region: "Spain",
+        difficulty: "Hard",
+        country: "Spain",
+        type: "trail",
+        date: "2026-05-24",
+        website: "https://www.zegama.eus",
+        profile: [400, 600, 900, 1200, 1500, 1400, 1300, 1200, 1100, 1000, 1100, 1300, 1500, 1400, 1200, 1000, 800, 600, 400, 300, 250, 200, 150, 100],
+      },
+      {
+        id: "lavaredo-120k",
+        name: "Lavaredo Ultra Trail 120K",
+        location: "Dolomites",
+        distance: 120,
+        elevGain: 5850,
+        region: "Veneto",
+        difficulty: "Hard",
+        country: "Italy",
+        type: "trail",
+        date: "2026-06-25",
+        website: "https://www.laveredo.it",
+        profile: [1300, 1500, 1800, 2100, 2400, 2350, 2250, 2150, 2000, 1850, 1700, 1600, 1500, 1400, 1500, 1700, 1900, 2100, 2350, 2380, 2300, 2100, 1700, 1300],
       },
     ];
 
@@ -1224,35 +1558,55 @@
       return spotifyFetch(token, "/me");
     }
 
-    async function searchTracksByBpm(token, targetBpm, limit = 20, genres = "electronic,rock,pop") {
-      // Try recommendations first
-      try {
-        const params = new URLSearchParams({
-          seed_genres: genres,
-          target_tempo: targetBpm,
-          min_tempo: Math.max(95, targetBpm - 15),
-          max_tempo: Math.min(180, targetBpm + 15),
-          min_energy: 0.5,
-          market: "US",
-          limit: limit,
-        });
-        const result = await spotifyFetch(token, `/recommendations?${params.toString()}`);
-        if (result.tracks && result.tracks.length > 0) return result;
-      } catch (e) {
-        console.warn("Recommendations API failed, trying search fallback", e);
+    // ── Search-based track fetching (Feb 2026: /recommendations removed for Dev Mode) ──
+    // Search limit max is now 10. We paginate with offset to gather more candidates.
+    async function searchTracksByBpm(token, targetBpm, limit = 10, genres = "electronic,rock,pop") {
+      const genreList = genres.split(",").map(g => g.trim()).filter(Boolean);
+      const allTracks = [];
+
+      // Build varied queries from genres + energy keywords
+      const queries = [
+        ...genreList.map(g => `${g} running workout`),
+        ...genreList.map(g => `${g} energy`),
+        ...genreList.slice(0, 2).map(g => `${g} 2024 2025`),
+      ];
+
+      for (const q of queries) {
+        if (allTracks.length >= limit) break;
+        try {
+          const params = new URLSearchParams({
+            q: q,
+            type: "track",
+            market: "US",
+            limit: 10, // Feb 2026 max
+            offset: Math.floor(Math.random() * 20), // Randomize for variety
+          });
+          const data = await spotifyFetch(token, `/search?${params.toString()}`);
+          if (data.tracks?.items?.length > 0) {
+            allTracks.push(...data.tracks.items);
+          }
+        } catch (e) {
+          console.warn("Search query failed:", q, e);
+        }
       }
-      // Fallback to search API
-      const genre = genres.split(",")[0] || "pop";
-      return searchTracksByQuery(token, targetBpm, limit, genre);
+
+      // Deduplicate by track id, shuffle for variety
+      const seen = new Set();
+      const unique = allTracks.filter(t => {
+        if (!t.id || seen.has(t.id)) return false;
+        seen.add(t.id);
+        return true;
+      }).sort(() => Math.random() - 0.5);
+
+      return { tracks: unique.slice(0, limit) };
     }
 
-    // Fallback: search Spotify catalog by genre + BPM keywords
-    async function searchTracksByQuery(token, targetBpm, limit = 3, genre = "pop") {
-      const bpmRange = `${Math.max(80, targetBpm - 10)}-${Math.min(200, targetBpm + 10)}`;
+    // Simple search with a single query string
+    async function searchTracksByQuery(token, targetBpm, limit = 10, genre = "pop") {
       const queries = [
-        `genre:${genre} year:2020-2026`,
-        `genre:${genre}`,
-        `${genre} workout running`,
+        `${genre} running`,
+        `${genre} workout`,
+        `${genre} energy`,
       ];
       for (const q of queries) {
         try {
@@ -1260,11 +1614,10 @@
             q: q,
             type: "track",
             market: "US",
-            limit: Math.min(limit * 3, 50),
+            limit: Math.min(limit, 10), // Feb 2026 max is 10
           });
           const data = await spotifyFetch(token, `/search?${params.toString()}`);
-          if (data.tracks && data.tracks.items && data.tracks.items.length > 0) {
-            // Shuffle results for variety
+          if (data.tracks?.items?.length > 0) {
             const shuffled = data.tracks.items.sort(() => Math.random() - 0.5);
             return { tracks: shuffled.slice(0, limit) };
           }
@@ -1285,35 +1638,77 @@
       return spotifyFetch(token, `/me/top/artists?${params.toString()}`);
     }
 
-    async function searchTracksByBpmPersonalized(token, targetBpm, limit = 20, seedTrackIds = [], seedArtistIds = []) {
-      // Try recommendations first
-      try {
-        const params = new URLSearchParams({
-          target_tempo: targetBpm,
-          min_tempo: Math.max(95, targetBpm - 15),
-          max_tempo: Math.min(180, targetBpm + 15),
-          min_energy: 0.5,
-          market: "US",
-          limit: limit,
-        });
-        if (seedTrackIds.length > 0) {
-          params.set("seed_tracks", seedTrackIds.slice(0, 3).join(","));
+    // Personalized search: uses user's top artist names + top track names as queries
+    // (Feb 2026: /recommendations removed for Dev Mode — replaced with search-based approach)
+    async function searchTracksByBpmPersonalized(token, targetBpm, limit = 10, seedTrackIds = [], seedArtistIds = [], topSeedsData = null) {
+      const allTracks = [];
+
+      // Strategy 1: Search by user's top artist names (most effective for taste matching)
+      if (topSeedsData?.artistNames?.length > 0) {
+        const artistQueries = topSeedsData.artistNames
+          .sort(() => Math.random() - 0.5)
+          .slice(0, 3);
+        for (const artistName of artistQueries) {
+          if (allTracks.length >= limit) break;
+          try {
+            const params = new URLSearchParams({
+              q: `artist:${artistName}`,
+              type: "track",
+              market: "US",
+              limit: 10,
+              offset: Math.floor(Math.random() * 10),
+            });
+            const data = await spotifyFetch(token, `/search?${params.toString()}`);
+            if (data.tracks?.items?.length > 0) {
+              allTracks.push(...data.tracks.items);
+            }
+          } catch (e) {
+            console.warn("Artist search failed:", artistName, e);
+          }
         }
-        if (seedArtistIds.length > 0) {
-          params.set("seed_artists", seedArtistIds.slice(0, 2).join(","));
-        }
-        if (seedTrackIds.length === 0 && seedArtistIds.length === 0) {
-          params.set("seed_genres", "electronic,rock,pop");
-        }
-        const result = await spotifyFetch(token, `/recommendations?${params.toString()}`);
-        if (result.tracks && result.tracks.length > 0) return result;
-      } catch (e) {
-        console.warn("Personalized recommendations failed, trying search fallback", e);
       }
-      // Fallback to search API with varied genres
-      const genres = ["pop", "rock", "electronic", "indie", "hip-hop"];
-      const genre = genres[Math.floor(Math.random() * genres.length)];
-      return searchTracksByQuery(token, targetBpm, limit, genre);
+
+      // Strategy 2: Search by user's top genres + energy keywords
+      if (topSeedsData?.genres?.length > 0 && allTracks.length < limit) {
+        const genreQueries = topSeedsData.genres
+          .sort(() => Math.random() - 0.5)
+          .slice(0, 3);
+        for (const genre of genreQueries) {
+          if (allTracks.length >= limit) break;
+          try {
+            const params = new URLSearchParams({
+              q: `${genre} running`,
+              type: "track",
+              market: "US",
+              limit: 10,
+            });
+            const data = await spotifyFetch(token, `/search?${params.toString()}`);
+            if (data.tracks?.items?.length > 0) {
+              allTracks.push(...data.tracks.items);
+            }
+          } catch (e) {
+            console.warn("Genre search failed:", genre, e);
+          }
+        }
+      }
+
+      // Strategy 3: Fallback to generic energy search
+      if (allTracks.length < 3) {
+        const fallbackGenres = ["pop", "rock", "electronic", "indie", "hip-hop"];
+        const genre = fallbackGenres[Math.floor(Math.random() * fallbackGenres.length)];
+        const fallback = await searchTracksByQuery(token, targetBpm, limit, genre);
+        allTracks.push(...(fallback.tracks || []));
+      }
+
+      // Deduplicate
+      const seen = new Set();
+      const unique = allTracks.filter(t => {
+        if (!t.id || seen.has(t.id)) return false;
+        seen.add(t.id);
+        return true;
+      }).sort(() => Math.random() - 0.5);
+
+      return { tracks: unique.slice(0, limit) };
     }
 
     async function createSpotifyPlaylist(token, userId, name, description, trackUris) {
@@ -1660,6 +2055,11 @@
       );
     }
 
+    function countryFlag(country) {
+      const flags = { "France": "🇫🇷", "USA": "🇺🇸", "UK": "🇬🇧", "Germany": "🇩🇪", "Japan": "🇯🇵", "Italy": "🇮🇹", "Spain": "🇪🇸", "Switzerland": "🇨🇭" };
+      return flags[country] || "🌍";
+    }
+
     function PaceDropApp() {
       const [spotifyToken, setSpotifyToken] = useState(null);
       const [spotifyUser, setSpotifyUser] = useState(null);
@@ -1680,6 +2080,8 @@
       const [loadingTaste, setLoadingTaste] = useState(false);
       const [musicMode, setMusicMode] = useState("my-taste"); // "my-taste", "mood", "random", "generic"
       const [selectedMood, setSelectedMood] = useState(null);
+      const [trailSearch, setTrailSearch] = useState("");
+      const [trailFilter, setTrailFilter] = useState("all"); // "all", "road", "trail", "upcoming"
 
       const MOOD_GENRES = [
         { id: "rock", label: "Rock", emoji: "🎸" },
@@ -1775,6 +2177,36 @@
             profile: Array(20).fill(50),
           }
         : null;
+
+      const filteredTrails = React.useMemo(() => {
+        let trails = TRAIL_DATABASE;
+
+        // Text search
+        if (trailSearch.trim()) {
+          const q = trailSearch.toLowerCase();
+          trails = trails.filter(t =>
+            t.name.toLowerCase().includes(q) ||
+            t.location.toLowerCase().includes(q) ||
+            t.region.toLowerCase().includes(q) ||
+            (t.country || "").toLowerCase().includes(q)
+          );
+        }
+
+        // Type filter
+        if (trailFilter === "road") trails = trails.filter(t => t.type === "road");
+        else if (trailFilter === "trail") trails = trails.filter(t => t.type === "trail");
+        else if (trailFilter === "upcoming") {
+          const now = new Date();
+          const threeMonths = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+          trails = trails.filter(t => {
+            if (!t.date) return false;
+            const d = new Date(t.date);
+            return d >= now && d <= threeMonths;
+          });
+        }
+
+        return trails;
+      }, [trailSearch, trailFilter]);
 
       const currentTrail = flatRunTrail || gpxTrail || selectedTrail;
 
@@ -1896,7 +2328,7 @@
                   rec = await searchTracksByBpmPersonalized(
                     spotifyToken, bpm, OVER_FETCH,
                     shuffledTracks.slice(0, 5),
-                    []
+                    [], topSeeds
                   );
                 } else if (musicMode === "mood" && selectedMood) {
                   rec = await searchTracksByBpm(spotifyToken, bpm, OVER_FETCH, selectedMood);
@@ -1906,7 +2338,7 @@
                   rec = await searchTracksByBpmPersonalized(
                     spotifyToken, bpm, OVER_FETCH,
                     shuffledTracks.slice(0, 3),
-                    shuffledArtists.slice(0, 2)
+                    shuffledArtists.slice(0, 2), topSeeds
                   );
                 } else {
                   const genres = ["electronic", "rock", "pop", "indie"];
@@ -1959,6 +2391,7 @@
 
             tracksBySegment.push({
               bpm,
+              gradient: seg.gradient,
               tracks: selectedTrack ? [selectedTrack] : [],
             });
           }
@@ -2053,7 +2486,7 @@
               <div className="logo-icon">&#9835;</div>
               <h1>PaceDrop</h1>
             </div>
-            <p className="tagline">Your run. Your soundtrack. Perfectly synced.</p>
+            <p className="tagline">Your Run · Your Soundtrack · Perfectly Synced</p>
           </header>
 
           {/* Spotify Connect Bar */}
@@ -2112,7 +2545,7 @@
                   { id: "my-taste", label: "My Taste", emoji: "&#10024;", desc: "Based on what you listen to" },
                   { id: "mood", label: "Mood", emoji: "&#127926;", desc: "Pick a genre" },
                   { id: "random", label: "Shuffle", emoji: "&#128256;", desc: "Random from your history" },
-                  { id: "generic", label: "Explore", emoji: "&#127758;", desc: "Generic recommendations" },
+                  { id: "generic", label: "Explore", emoji: "&#127758;", desc: "Discover new tracks" },
                 ].map((mode) => (
                   <button
                     key={mode.id}
@@ -2217,7 +2650,7 @@
               {musicMode === "generic" && (
                 <div style={{ padding: "12px", background: "var(--cloud)", borderRadius: "8px" }}>
                   <div style={{ fontSize: "0.85rem", color: "var(--slate-600)" }}>
-                    Discover new music with recommendations from popular genres (electronic, rock, pop).
+                    Discover trending tracks from popular genres (electronic, rock, pop, indie).
                   </div>
                 </div>
               )}
@@ -2336,42 +2769,93 @@
             )}
           </div>
 
-          {/* Choose Trail */}
+          {/* Race Library */}
           <div className="section">
             <div className="section-title">
               <span className="section-icon">🏔️</span>
-              Popular Routes {gpxTrail ? "(or use your GPX above)" : ""}
+              Race Library {gpxTrail ? "(or use your GPX above)" : ""}
             </div>
-            <div className="trails-grid">
-              {FRENCH_TRAILS.map((trail) => (
-                <div
-                  key={trail.id}
-                  className={`trail-card ${!flatRunActive && selectedTrail?.id === trail.id ? "selected" : ""}`}
-                  onClick={() => {
-                    setSelectedTrail(trail);
-                    setGpxTrail(null);
-                    setFlatRunActive(false);
-                  }}
+
+            {/* Search Bar */}
+            <div className="trail-search-bar">
+              <div className="trail-search-wrapper">
+                <span className="trail-search-icon">🔍</span>
+                <input
+                  type="text"
+                  className="trail-search-input"
+                  placeholder="Search races by name, location, or country..."
+                  value={trailSearch}
+                  onChange={(e) => setTrailSearch(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Filter Chips */}
+            <div className="trail-filter-chips">
+              {[
+                { key: "all", label: "All", count: TRAIL_DATABASE.length },
+                { key: "road", label: "Road", count: TRAIL_DATABASE.filter(t => t.type === "road").length },
+                { key: "trail", label: "Trail", count: TRAIL_DATABASE.filter(t => t.type === "trail").length },
+                { key: "upcoming", label: "Upcoming", count: (() => { const now = new Date(); const m3 = new Date(now.getTime() + 90*24*60*60*1000); return TRAIL_DATABASE.filter(t => t.date && new Date(t.date) >= now && new Date(t.date) <= m3).length; })() },
+              ].map((f) => (
+                <button
+                  key={f.key}
+                  className={`filter-chip ${trailFilter === f.key ? "active" : ""}`}
+                  onClick={() => setTrailFilter(f.key)}
                 >
-                  <h3>{trail.name}</h3>
-                  <p className="trail-location">{trail.location}</p>
-                  <div className="trail-stats">
-                    <div className="trail-stat">
-                      <div className="trail-stat-label">Distance</div>
-                      <div className="trail-stat-value">{trail.distance}km</div>
-                    </div>
-                    <div className="trail-stat">
-                      <div className="trail-stat-label">Gain</div>
-                      <div className="trail-stat-value">{trail.elevGain}m</div>
-                    </div>
-                  </div>
-                  <ElevationSparkline profile={trail.profile} />
-                  <span className={`difficulty-badge difficulty-${trail.difficulty.toLowerCase()}`}>
-                    {trail.difficulty}
-                  </span>
-                </div>
+                  {f.label} ({f.count})
+                </button>
               ))}
             </div>
+
+            {/* Trails Grid */}
+            {filteredTrails.length > 0 ? (
+              <div className="trails-grid">
+                {filteredTrails.map((trail) => {
+                  const now = new Date();
+                  const threeMonths = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000);
+                  const isUpcoming = trail.date && new Date(trail.date) >= now && new Date(trail.date) <= threeMonths;
+                  const upcomingDate = isUpcoming ? new Date(trail.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : null;
+
+                  return (
+                    <div
+                      key={trail.id}
+                      className={`trail-card ${!flatRunActive && selectedTrail?.id === trail.id ? "selected" : ""}`}
+                      onClick={() => {
+                        setSelectedTrail(trail);
+                        setGpxTrail(null);
+                        setFlatRunActive(false);
+                      }}
+                    >
+                      <div className="trail-card-badges">
+                        {trail.type && <span className={`type-badge ${trail.type}`}>{trail.type}</span>}
+                        {isUpcoming && <span className="upcoming-badge">{upcomingDate}</span>}
+                      </div>
+                      <h3>{trail.name}</h3>
+                      <p className="trail-location">{trail.country && `${countryFlag(trail.country)} `}{trail.location}</p>
+                      <div className="trail-stats">
+                        <div className="trail-stat">
+                          <div className="trail-stat-label">Distance</div>
+                          <div className="trail-stat-value">{trail.distance}km</div>
+                        </div>
+                        <div className="trail-stat">
+                          <div className="trail-stat-label">Gain</div>
+                          <div className="trail-stat-value">{trail.elevGain}m</div>
+                        </div>
+                      </div>
+                      <ElevationSparkline profile={trail.profile} />
+                      <span className={`difficulty-badge difficulty-${trail.difficulty.toLowerCase()}`}>
+                        {trail.difficulty}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="no-results-message">
+                No races found matching your search. Try different keywords or adjust your filters.
+              </div>
+            )}
 
             {/* Flat Run Option */}
             <div className={`flat-run-section ${flatRunActive ? "active" : ""}`}>
